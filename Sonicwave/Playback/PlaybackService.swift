@@ -2,11 +2,17 @@ import Foundation
 import AVFoundation
 
 /// Owns the `AVAudioEngine` graph and drives the Option A progressive decode
-/// pipeline (loader → decoder → scheduled buffers). Exposes async intent and an
-/// `events` stream consumed by `PlayerModel`. See docs/03-playback-engine.md.
+/// pipeline. Achieves **gapless** playback by decoding every track to one
+/// canonical output format and scheduling consecutive tracks back-to-back on a
+/// single `AVAudioPlayerNode` (no stop between tracks), pre-buffering the next
+/// track via a pull model. See docs/03-playback-engine.md.
 ///
-/// M3 plays a single track; the second player node + gapless pre-buffering are
-/// added in M4.
+/// Coordination with `PlayerModel`:
+/// - `play(...)` hard-starts a track (used for first play, manual skip, seek).
+/// - When a track finishes decoding, the service emits `.wantNext(afterIndex:)`;
+///   `PlayerModel` replies with `enqueueNext(...)` (or `enqueueNoMore()`).
+/// - As playback crosses a track boundary the service emits `.trackChanged`.
+/// - `.ended` fires only when the final track finishes with no successor.
 actor PlaybackService {
     let events: AsyncStream<PlaybackEvent>
     private let continuation: AsyncStream<PlaybackEvent>.Continuation
@@ -14,21 +20,33 @@ actor PlaybackService {
     private let client: SubsonicClient
     private let engine = AVAudioEngine()
     private let node = AVAudioPlayerNode()
+    /// Single fixed format for the node connection so tracks play gaplessly.
+    private let canonicalFormat = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 2)!
+    private var engineConnected = false
 
-    private var outputFormat: AVAudioFormat?
-    private var loadGeneration = 0
-    private var currentSongId: String?
-    private var currentSuffix: String?
-    private var durationHint: TimeInterval = 0
-    private var seekBaseTime: TimeInterval = 0
+    /// A contiguous region of the node's output timeline belonging to one track.
+    private struct TrackSpan {
+        let id: String
+        let index: Int
+        let duration: TimeInterval
+        let seekBase: TimeInterval
+        var startFrame: AVAudioFramePosition
+        var frameCount: AVAudioFramePosition
+        var decodeComplete: Bool
+    }
 
+    private var spans: [TrackSpan] = []
+    private var cumulativeFrames: AVAudioFramePosition = 0
     private var outstandingBuffers = 0
-    private var finishedDecoding = false
+    private var noMoreTracks = false
+    private var reportedIndex: Int?
+    private var awaitingNext = false
+
+    private var generation = 0
     private var isPaused = false
     private var volume: Float = 1.0
 
-    private var loadTask: Task<Void, Never>?
-    private var consumeTask: Task<Void, Never>?
+    private var decodeTask: Task<Void, Never>?
     private var positionTask: Task<Void, Never>?
     private var activity: (any NSObjectProtocol)?
 
@@ -42,18 +60,31 @@ actor PlaybackService {
 
     // MARK: - Intent
 
-    /// Begin streaming and playing a song from the start.
-    func load(songId: String, suffix: String?, duration: TimeInterval) {
-        loadGeneration += 1
-        let gen = loadGeneration
-        teardown(resettingSong: false)
-        currentSongId = songId
-        currentSuffix = suffix
-        durationHint = duration
-        seekBaseTime = 0
+    /// Hard-start a track from `time` seconds in (default 0). Resets the gapless
+    /// timeline. Used for first play, manual skip and seek.
+    func play(songId: String, suffix: String?, duration: TimeInterval, index: Int, from time: TimeInterval = 0) {
+        generation += 1
+        let gen = generation
+        hardReset()
         isPaused = false
         emit(.stateChanged(.buffering))
-        beginLoad(songId: songId, suffix: suffix, gen: gen, timeOffset: nil)
+        if time > 0 { emit(.position(time: time, duration: duration)) }
+        startDecode(songId: songId, suffix: suffix, duration: duration, index: index,
+                    seekBase: time, timeOffset: time > 0 ? Int(time) : nil, gen: gen)
+    }
+
+    /// Provide the next track to pre-buffer (reply to `.wantNext`).
+    func enqueueNext(songId: String, suffix: String?, duration: TimeInterval, index: Int) {
+        guard awaitingNext else { return }
+        awaitingNext = false
+        startDecode(songId: songId, suffix: suffix, duration: duration, index: index,
+                    seekBase: 0, timeOffset: nil, gen: generation)
+    }
+
+    /// No successor — the current track is the last one.
+    func enqueueNoMore() {
+        awaitingNext = false
+        noMoreTracks = true
     }
 
     func pause() {
@@ -66,7 +97,7 @@ actor PlaybackService {
     }
 
     func resume() {
-        guard outputFormat != nil else { return }
+        guard engineConnected else { return }
         if !engine.isRunning { try? engine.start() }
         node.play()
         isPaused = false
@@ -75,22 +106,10 @@ actor PlaybackService {
         emit(.stateChanged(.playing))
     }
 
-    /// Seek by re-opening the stream at `time` (Option A has no random access).
-    func seek(to time: TimeInterval) {
-        guard let songId = currentSongId else { return }
-        loadGeneration += 1
-        let gen = loadGeneration
-        teardown(resettingSong: false)
-        seekBaseTime = time
-        isPaused = false
-        emit(.stateChanged(.buffering))
-        emit(.position(time: time, duration: durationHint))
-        beginLoad(songId: songId, suffix: currentSuffix, gen: gen, timeOffset: Int(time))
-    }
-
     func stop() {
-        loadGeneration += 1
-        teardown(resettingSong: true)
+        generation += 1
+        hardReset()
+        endActivity()
         emit(.stateChanged(.stopped))
     }
 
@@ -99,68 +118,76 @@ actor PlaybackService {
         engine.mainMixerNode.outputVolume = volume
     }
 
-    // MARK: - Load pipeline
+    // MARK: - Decode pipeline
 
-    private func beginLoad(songId: String, suffix: String?, gen: Int, timeOffset: Int?) {
-        finishedDecoding = false
-        outstandingBuffers = 0
-        loadTask = Task { [weak self] in
-            await self?.runLoad(songId: songId, suffix: suffix, gen: gen, timeOffset: timeOffset)
+    private func startDecode(songId: String, suffix: String?, duration: TimeInterval,
+                             index: Int, seekBase: TimeInterval, timeOffset: Int?, gen: Int) {
+        // Begin a new span starting at the current end of the scheduled timeline.
+        let span = TrackSpan(id: songId, index: index, duration: duration, seekBase: seekBase,
+                             startFrame: cumulativeFrames, frameCount: 0, decodeComplete: false)
+        spans.append(span)
+        let spanArrayIndex = spans.count - 1
+
+        decodeTask = Task { [weak self] in
+            await self?.runDecode(songId: songId, suffix: suffix, index: index,
+                                  timeOffset: timeOffset, spanArrayIndex: spanArrayIndex, gen: gen)
         }
     }
 
-    private func runLoad(songId: String, suffix: String?, gen: Int, timeOffset: Int?) async {
+    private func runDecode(songId: String, suffix: String?, index: Int,
+                           timeOffset: Int?, spanArrayIndex: Int, gen: Int) async {
         let prefs = TranscodePrefs.current()
         let url: URL
         do {
             url = try await client.streamURL(songId: songId, format: prefs.format,
                                              maxBitRate: prefs.maxBitRate, timeOffset: timeOffset)
         } catch {
-            emit(.failed((error as? SubsonicError)?.userMessage ?? error.localizedDescription))
-            emit(.stateChanged(.stopped))
+            if gen == generation { emit(.failed((error as? SubsonicError)?.userMessage ?? error.localizedDescription)) }
             return
         }
 
-        let source = ProgressiveAudioSource()
+        let source = ProgressiveAudioSource(outputFormat: canonicalFormat)
         source.open(fileTypeHint: audioFileTypeHint(forSuffix: suffix))
-        let decodedBuffers = source.buffers
+        let decoded = source.buffers
 
-        // Consume decoded PCM and schedule it as it arrives.
-        consumeTask = Task { [weak self] in
-            for await box in decodedBuffers {
-                await self?.schedule(box.buffer, gen: gen)
+        let consume = Task { [weak self] in
+            for await box in decoded {
+                await self?.schedule(box.buffer, spanArrayIndex: spanArrayIndex, gen: gen)
             }
-            await self?.decodingFinished(gen: gen)
         }
 
-        // Feed bytes into the decoder until the transfer ends.
         let loader = DataStreamLoader()
         do {
             for try await chunk in loader.stream(from: url) {
-                if gen != loadGeneration || Task.isCancelled { break }
+                if gen != generation || Task.isCancelled { break }
                 source.parse(chunk)
             }
         } catch {
-            if gen == loadGeneration {
+            if gen == generation {
                 emit(.failed((error as? SubsonicError)?.userMessage ?? error.localizedDescription))
             }
         }
         source.finish()
+        _ = await consume.value
+        await decodeComplete(spanArrayIndex: spanArrayIndex, index: index, gen: gen)
     }
 
-    private func schedule(_ buffer: AVAudioPCMBuffer, gen: Int) {
-        guard gen == loadGeneration else { return }
+    private func schedule(_ buffer: AVAudioPCMBuffer, spanArrayIndex: Int, gen: Int) {
+        guard gen == generation, spans.indices.contains(spanArrayIndex) else { return }
 
-        // Connect/start the engine lazily once the decoded format is known.
-        if outputFormat == nil {
-            outputFormat = buffer.format
-            engine.connect(node, to: engine.mainMixerNode, format: buffer.format)
+        if !engineConnected {
+            engine.connect(node, to: engine.mainMixerNode, format: canonicalFormat)
             engine.mainMixerNode.outputVolume = volume
+            engineConnected = true
             do { try engine.start() } catch {
                 emit(.failed("Audio engine failed to start: \(error.localizedDescription)"))
                 return
             }
         }
+
+        let frames = AVAudioFramePosition(buffer.frameLength)
+        spans[spanArrayIndex].frameCount += frames
+        cumulativeFrames += frames
 
         outstandingBuffers += 1
         node.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { [weak self] _ in
@@ -175,27 +202,40 @@ actor PlaybackService {
         }
     }
 
+    private func decodeComplete(spanArrayIndex: Int, index: Int, gen: Int) {
+        guard gen == generation, spans.indices.contains(spanArrayIndex) else { return }
+        spans[spanArrayIndex].decodeComplete = true
+        if spans[spanArrayIndex].frameCount == 0 && spans.count == 1 {
+            emit(.failed("Could not decode this track."))
+            emit(.stateChanged(.stopped))
+            return
+        }
+        // Ready to pre-buffer the successor of this track.
+        awaitingNext = true
+        emit(.wantNext(afterIndex: index))
+    }
+
     private func bufferCompleted(gen: Int) {
-        guard gen == loadGeneration else { return }
+        guard gen == generation else { return }
         outstandingBuffers -= 1
-        if finishedDecoding && outstandingBuffers <= 0 {
+        if outstandingBuffers <= 0 && noMoreTracks && allDecodeComplete {
             stopPositionUpdates()
-            emit(.position(time: durationHint, duration: durationHint))
+            if let last = spans.last { emit(.position(time: last.duration, duration: last.duration)) }
             emit(.ended)
         }
     }
 
-    private func decodingFinished(gen: Int) {
-        guard gen == loadGeneration else { return }
-        finishedDecoding = true
-        if outstandingBuffers <= 0 && node.isPlaying == false && currentSongId != nil {
-            // Nothing decoded (e.g. unsupported format / empty stream).
-            emit(.failed("Could not decode this track."))
-            emit(.stateChanged(.stopped))
-        }
+    private var allDecodeComplete: Bool { spans.allSatisfy(\.decodeComplete) }
+
+    // MARK: - Seek
+
+    /// Seek re-opens the current track at `time` (Option A has no random access).
+    func seek(to time: TimeInterval) {
+        guard let active = activeSpan() else { return }
+        play(songId: active.id, suffix: nil, duration: active.duration, index: active.index, from: time)
     }
 
-    // MARK: - Position
+    // MARK: - Position / boundary detection
 
     private func startPositionUpdates() {
         positionTask?.cancel()
@@ -213,36 +253,53 @@ actor PlaybackService {
     }
 
     private func tick() {
-        let t = currentTime()
-        let clamped = durationHint > 0 ? min(t, durationHint) : t
-        emit(.position(time: clamped, duration: durationHint))
+        guard let sample = currentSampleTime(), let span = activeSpan(at: sample) else { return }
+
+        if reportedIndex != span.index {
+            reportedIndex = span.index
+            emit(.trackChanged(index: span.index))
+        }
+        let rate = canonicalFormat.sampleRate
+        let elapsed = span.seekBase + Double(sample - span.startFrame) / rate
+        let clamped = span.duration > 0 ? min(elapsed, span.duration) : elapsed
+        emit(.position(time: max(0, clamped), duration: span.duration))
     }
 
-    private func currentTime() -> TimeInterval {
+    private func currentSampleTime() -> AVAudioFramePosition? {
         guard let nodeTime = node.lastRenderTime,
-              let playerTime = node.playerTime(forNodeTime: nodeTime),
-              let rate = outputFormat?.sampleRate, rate > 0 else {
-            return seekBaseTime
+              let playerTime = node.playerTime(forNodeTime: nodeTime) else { return nil }
+        return playerTime.sampleTime
+    }
+
+    /// The span currently audible (last span whose start is at/below `sample`).
+    private func activeSpan(at sample: AVAudioFramePosition) -> TrackSpan? {
+        var result: TrackSpan?
+        for span in spans where span.startFrame <= sample {
+            result = span
         }
-        return seekBaseTime + Double(playerTime.sampleTime) / rate
+        return result ?? spans.first
+    }
+
+    private func activeSpan() -> TrackSpan? {
+        if let sample = currentSampleTime(), let span = activeSpan(at: sample) { return span }
+        return spans.first
     }
 
     // MARK: - Teardown / power
 
-    private func teardown(resettingSong: Bool) {
-        loadTask?.cancel(); loadTask = nil
-        consumeTask?.cancel(); consumeTask = nil
+    private func hardReset() {
+        decodeTask?.cancel(); decodeTask = nil
         stopPositionUpdates()
         node.stop()
         node.reset()
-        outputFormat = nil
+        spans.removeAll()
+        cumulativeFrames = 0
         outstandingBuffers = 0
-        finishedDecoding = false
-        if resettingSong {
-            currentSongId = nil
-            currentSuffix = nil
-            endActivity()
-        }
+        noMoreTracks = false
+        awaitingNext = false
+        reportedIndex = nil
+        // Engine stays connected at the canonical format; node.reset() clears
+        // the scheduled buffer queue.
     }
 
     private func beginActivity() {

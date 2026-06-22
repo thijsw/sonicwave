@@ -6,8 +6,9 @@ shippable-internally increment. The hardest item — streaming gapless via
 playback first (M3).
 
 > **Live status:** M0 ✅ · M1 ✅ · M2 🚧 (UI/data in-memory; SwiftData cache
-> pending) · M3 🚧 (code-complete & tested; runtime audio unverified — needs a
-> live server). See `PROGRESS.md` for the detailed build log.
+> pending) · M3 🚧 (code-complete & tested; runtime audio unverified) ·
+> M4 🚧 (gapless + queue + column browser code-complete & tested; gapless seam
+> needs device verification). See `PROGRESS.md` for the detailed build log.
 
 ## M0 — Foundation ✅
 - Create the Xcode app project (macOS 15 deployment, Swift 6 language mode,
@@ -47,7 +48,7 @@ playback first (M3).
 - **Exit:** play/pause/seek a track; Now Playing widget + media keys work;
   artwork + elapsed time correct.
 
-## M4 — Gapless + queue + column browser 🔬 (highest risk)
+## M4 — Gapless + queue + column browser 🚧 (highest risk)
 - **Spike:** streaming **gapless** with dual player nodes + pre-buffering on the
   committed Option A progressive-decode pipeline; also harden Option A's known
   rough edges (magic cookie, seek accuracy) — `03`. Meet the M4 spike checklist.

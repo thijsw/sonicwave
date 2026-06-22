@@ -39,6 +39,17 @@ float stereo) so a single connection format suffices, and use the second node
 purely to overlap load/schedule of N+1. Decide canonical-format-vs-reconnect in
 the spike.
 
+**Implemented (M4, 2026-06-22):** the spike resolved to the **canonical-format,
+single-node** variant. `PlaybackService` decodes every track to a fixed
+canonical format (44.1 kHz / stereo / float) and schedules consecutive tracks
+back-to-back on **one** `AVAudioPlayerNode` without stopping it — gapless falls
+out of continuous scheduling, and sample-rate changes are absorbed by resampling
+to the canonical format. The second node proved unnecessary because the next
+track is decoded ahead of the play head and its buffers are appended to the same
+node. Pre-buffering uses a pull model (`.wantNext` → `enqueueNext`), and track
+boundaries are detected from the node's sample-time spans (`.trackChanged`).
+Still pending **device verification** of the audible seam.
+
 ## Streaming decode source ✅ (decision: Option A — progressive decode)
 
 We need compressed audio (mp3/aac/opus/flac/…) from an HTTP `stream` URL turned

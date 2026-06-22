@@ -18,8 +18,8 @@ enum RepeatMode: String, Sendable, CaseIterable {
 ///
 /// Queue/transport bookkeeping is synchronous and engine-independent (so it's
 /// unit-testable without audio). When a `PlaybackService` is injected, intent is
-/// forwarded to it and its `events` drive `state`/`position`. See
-/// docs/01-architecture.md and docs/03-playback-engine.md.
+/// forwarded to it; gapless advances are driven by its `.trackChanged` /
+/// `.wantNext` events. See docs/01-architecture.md and docs/03-playback-engine.md.
 @MainActor
 @Observable
 final class PlayerModel {
@@ -41,6 +41,12 @@ final class PlayerModel {
 
     var isPlaying: Bool { state == .playing }
 
+    /// Upcoming tracks after the current one (the visible "Up Next").
+    var upNext: ArraySlice<Song> {
+        guard let index = currentIndex, index + 1 <= queue.count else { return [] }
+        return queue[(index + 1)...]
+    }
+
     @ObservationIgnored private let playback: PlaybackService?
     @ObservationIgnored private let nowPlaying: NowPlayingCenter?
     @ObservationIgnored private var eventTask: Task<Void, Never>?
@@ -52,7 +58,7 @@ final class PlayerModel {
         wireRemoteCommands()
     }
 
-    // MARK: - Queue management
+    // MARK: - Start / enqueue
 
     /// Replace the queue and start playing at the given index.
     func play(tracks: [Song], startAt index: Int = 0) {
@@ -60,7 +66,7 @@ final class PlayerModel {
         queue = tracks
         setCurrent(index)
         state = .playing
-        loadCurrent()
+        startCurrent()
     }
 
     func playNext(_ tracks: [Song]) {
@@ -70,6 +76,45 @@ final class PlayerModel {
 
     func enqueue(_ tracks: [Song]) {
         queue.append(contentsOf: tracks)
+    }
+
+    // MARK: - Queue editing (Up Next)
+
+    /// Jump to and play a specific queue index (hard start).
+    func playFromQueue(at index: Int) {
+        guard queue.indices.contains(index) else { return }
+        setCurrent(index)
+        state = .playing
+        startCurrent()
+    }
+
+    /// Move queue items (SwiftUI `onMove`), keeping the current track tracked.
+    func moveQueue(from offsets: IndexSet, to destination: Int) {
+        queue.move(fromOffsets: offsets, toOffset: destination)
+        reindexCurrent()
+    }
+
+    func removeFromQueue(at index: Int) {
+        guard queue.indices.contains(index) else { return }
+        let removingCurrent = index == currentIndex
+        queue.remove(at: index)
+        if removingCurrent {
+            if queue.isEmpty {
+                clearPlayback()
+            } else {
+                setCurrent(min(index, queue.count - 1))
+                startCurrent()
+            }
+        } else {
+            reindexCurrent()
+        }
+    }
+
+    /// Remove everything after the current track.
+    func clearUpNext() {
+        guard let index = currentIndex, index + 1 < queue.count else { return }
+        queue.removeSubrange((index + 1)...)
+        forward { await $0.enqueueNoMore() }
     }
 
     // MARK: - Transport
@@ -85,7 +130,7 @@ final class PlayerModel {
         case .stopped:
             guard currentTrack != nil else { return }
             state = .playing
-            loadCurrent()
+            startCurrent()
         case .buffering:
             break
         }
@@ -94,11 +139,8 @@ final class PlayerModel {
 
     func next() {
         guard let index = currentIndex else { return }
-        let nextIndex = index + 1
-        if queue.indices.contains(nextIndex) {
-            advance(to: nextIndex)
-        } else if repeatMode == .all, !queue.isEmpty {
-            advance(to: 0)
+        if let target = linearNext(after: index) {
+            advanceManual(to: target)
         } else {
             state = .stopped
             forward { await $0.stop() }
@@ -111,9 +153,9 @@ final class PlayerModel {
             seek(to: 0)
             return
         }
-        let prevIndex = index - 1
-        if queue.indices.contains(prevIndex) {
-            advance(to: prevIndex)
+        let prev = index - 1
+        if queue.indices.contains(prev) {
+            advanceManual(to: prev)
         } else {
             seek(to: 0)
         }
@@ -135,30 +177,50 @@ final class PlayerModel {
         position = 0
     }
 
-    private func advance(to index: Int) {
+    /// Manual skip: hard-restart playback at `index` (a brief gap is expected).
+    private func advanceManual(to index: Int) {
         guard queue.indices.contains(index) else { return }
         setCurrent(index)
         state = .playing
-        loadCurrent()
+        startCurrent()
     }
 
-    private func loadCurrent() {
-        guard let track = currentTrack else { return }
+    private func startCurrent(from time: TimeInterval = 0) {
+        guard let track = currentTrack, let index = currentIndex else { return }
         updateNowPlayingTrack()
         let id = track.id
         let suffix = track.suffix
         let dur = TimeInterval(track.duration ?? 0)
-        forward { await $0.load(songId: id, suffix: suffix, duration: dur) }
+        forward { await $0.play(songId: id, suffix: suffix, duration: dur, index: index, from: time) }
     }
 
-    /// Natural end of the current track (from the engine), distinct from a
-    /// manual skip: honors repeat-one.
-    private func handleTrackEnded() {
-        if repeatMode == .one {
-            seek(to: 0)
-            return
-        }
-        next()
+    private func clearPlayback() {
+        currentTrack = nil
+        currentIndex = nil
+        state = .stopped
+        position = 0
+        duration = 0
+        forward { await $0.stop() }
+        nowPlaying?.update(track: nil, state: .stopped, position: 0, duration: 0)
+    }
+
+    private func reindexCurrent() {
+        guard let id = currentTrack?.id else { return }
+        currentIndex = queue.firstIndex { $0.id == id }
+    }
+
+    /// Successor for automatic (gapless) advance — honors repeat-one (loop).
+    private func autoNext(after index: Int) -> Int? {
+        if repeatMode == .one { return index }
+        return linearNext(after: index)
+    }
+
+    /// Successor for manual skip — ignores repeat-one, honors repeat-all wrap.
+    private func linearNext(after index: Int) -> Int? {
+        let next = index + 1
+        if queue.indices.contains(next) { return next }
+        if repeatMode == .all, !queue.isEmpty { return 0 }
+        return nil
     }
 
     // MARK: - Event loop
@@ -180,11 +242,41 @@ final class PlayerModel {
             position = time
             if dur > 0 { duration = dur }
             nowPlaying?.updateProgress(position: position, duration: duration, state: state)
+        case let .trackChanged(index):
+            gaplessAdvance(to: index)
+        case let .wantNext(afterIndex):
+            provideNext(after: afterIndex)
         case .ended:
-            handleTrackEnded()
+            state = .stopped
+            syncNowPlayingState()
         case let .failed(message):
             lastError = message
             state = .stopped
+        }
+    }
+
+    /// The engine crossed a gapless boundary into a pre-buffered track.
+    private func gaplessAdvance(to index: Int) {
+        guard queue.indices.contains(index), index != currentIndex else { return }
+        if let current = currentTrack { history.append(current) }
+        currentIndex = index
+        currentTrack = queue[index]
+        duration = TimeInterval(queue[index].duration ?? 0)
+        position = 0
+        updateNowPlayingTrack()
+    }
+
+    /// The engine asks for the successor to pre-buffer.
+    private func provideNext(after index: Int) {
+        guard let playback else { return }
+        if let target = autoNext(after: index), queue.indices.contains(target) {
+            let song = queue[target]
+            let id = song.id
+            let suffix = song.suffix
+            let dur = TimeInterval(song.duration ?? 0)
+            Task { await playback.enqueueNext(songId: id, suffix: suffix, duration: dur, index: target) }
+        } else {
+            Task { await playback.enqueueNoMore() }
         }
     }
 

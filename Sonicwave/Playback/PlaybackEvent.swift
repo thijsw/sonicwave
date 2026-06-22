@@ -5,7 +5,12 @@ import Foundation
 enum PlaybackEvent: Sendable {
     case stateChanged(PlaybackState)
     case position(time: TimeInterval, duration: TimeInterval)
-    /// The current track finished playing naturally (not via stop/skip).
+    /// Playback crossed a gapless boundary into the track at `index` (queue index).
+    case trackChanged(index: Int)
+    /// The service finished decoding the track at `afterIndex` and is ready to
+    /// pre-buffer its successor. `PlayerModel` replies with `enqueueNext`/`enqueueNoMore`.
+    case wantNext(afterIndex: Int)
+    /// The final track finished with no successor.
     case ended
     case failed(String)
 }

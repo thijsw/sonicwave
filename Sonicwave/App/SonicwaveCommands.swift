@@ -5,8 +5,18 @@ import SwiftUI
 /// See docs/04-ui-ux.md.
 struct SonicwaveCommands: Commands {
     let app: AppModel
+    @AppStorage("showUpNext") private var showUpNext = false
+    @AppStorage("showColumnBrowser") private var showColumnBrowser = true
 
     var body: some Commands {
+        CommandGroup(after: .sidebar) {
+            Toggle("Show Up Next", isOn: $showUpNext)
+                .keyboardShortcut("u", modifiers: .command)
+            Toggle("Show Column Browser", isOn: $showColumnBrowser)
+                .keyboardShortcut("b", modifiers: [.command, .option])
+            Divider()
+        }
+
         CommandMenu("Controls") {
             Button(app.player.isPlaying ? "Pause" : "Play") {
                 app.player.togglePlayPause()

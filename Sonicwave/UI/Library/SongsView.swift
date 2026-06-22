@@ -1,19 +1,26 @@
 import SwiftUI
 
-/// Flat songs table. Subsonic has no "all songs" endpoint, so this currently
-/// shows a random sample (see docs/05-data-and-caching.md, known limitation).
+/// Songs browse view. With the column browser enabled (View menu / toolbar),
+/// shows the Genre → Artist → Album browser; otherwise a flat songs table.
+/// Note: Subsonic has no "all songs" endpoint, so the flat list shows a random
+/// sample (see docs/05-data-and-caching.md, known limitation).
 struct SongsView: View {
     @Environment(LibraryModel.self) private var library
+    @AppStorage("showColumnBrowser") private var showColumnBrowser = true
 
     var body: some View {
         Group {
-            if library.songs.isEmpty, case .loading = library.songsState {
+            if showColumnBrowser {
+                ColumnBrowserView()
+            } else if library.songs.isEmpty, case .loading = library.songsState {
                 ProgressView()
             } else {
                 TrackTableView(tracks: library.songs)
             }
         }
         .navigationTitle("Songs")
-        .task { await library.loadSongsIfNeeded() }
+        .task(id: showColumnBrowser) {
+            if !showColumnBrowser { await library.loadSongsIfNeeded() }
+        }
     }
 }

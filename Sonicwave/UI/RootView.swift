@@ -10,6 +10,7 @@ struct RootView: View {
 
     @State private var selection: SidebarSelection? = .albums
     @State private var searchText = ""
+    @AppStorage("showUpNext") private var showUpNext = false
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
@@ -18,15 +19,21 @@ struct RootView: View {
         } detail: {
             detail
                 .toolbar {
-                    ToolbarItem(placement: .principal) {
-                        if isConnected {
-                            // Reserved for breadcrumb / column-browser toggle (M4).
-                            EmptyView()
+                    ToolbarItem {
+                        Button {
+                            showUpNext.toggle()
+                        } label: {
+                            Label("Up Next", systemImage: "list.bullet.rectangle")
                         }
+                        .help("Show Up Next")
                     }
                 }
         }
         .searchable(text: $searchText, placement: .toolbar, prompt: "Search")
+        .inspector(isPresented: $showUpNext) {
+            UpNextView()
+                .inspectorColumnWidth(min: 240, ideal: 300, max: 420)
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             NowPlayingBar()
         }

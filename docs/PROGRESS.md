@@ -17,7 +17,8 @@ milestone first. See `10-roadmap.md` for the full milestone plan.
 
 ## Milestone status
 M0 ✅ · M1 ✅ · M2 🚧 (UI/data in-memory; SwiftData cache pending) ·
-M3 🚧 (code-complete, runtime audio unverified)
+M3 🚧 (code-complete, runtime audio unverified) ·
+M4 🚧 (gapless + queue + column browser code-complete; gapless needs device verification)
 
 ## How to build / test
 ```sh
@@ -59,6 +60,36 @@ Status: **complete, builds clean, 18 unit tests passing.**
   `PlayerQueueTests` — md5 vectors, salt randomness, URL/auth construction for
   both methods, transcoding params, envelope/model/date decoding, failed-status
   → error, queue/transport logic.
+
+## M4 — Gapless + queue + column browser 🚧
+Status: **code-complete & builds clean (tests green); gapless transitions need
+device verification** (no server/audio device here).
+- **Gapless engine** — `PlaybackService` reworked to decode **every track to one
+  canonical format** (44.1 kHz/stereo float) and schedule consecutive tracks
+  back-to-back on a single `AVAudioPlayerNode` (no stop between tracks), so
+  transitions are seamless and **sample-rate changes are handled by resampling**.
+  Pre-buffering uses a **pull model**: when a track finishes decoding the service
+  emits `.wantNext(afterIndex:)`, `PlayerModel` replies `enqueueNext`/
+  `enqueueNoMore`. Track boundaries detected via sample-time **spans** →
+  `.trackChanged(index)`; `.ended` only when the last track finishes.
+  `ProgressiveAudioSource` now decodes to the supplied canonical format.
+- **PlayerModel** — gapless coordination (`gaplessAdvance`, `provideNext`,
+  auto vs manual successor incl. repeat-one loop / repeat-all wrap). Manual
+  skip/seek hard-restart (a brief gap is expected, by design).
+- **Up Next UI** — `UI/NowPlaying/UpNextView.swift` shown as an `.inspector`
+  (⌘U / toolbar / View menu): now-playing + upcoming, **drag reorder**, remove,
+  **play-from-here**, clear. Backed by tested `PlayerModel` queue editing
+  (`moveQueue`, `removeFromQueue`, `clearUpNext`, `playFromQueue`).
+- **Column browser** — `UI/Library/ColumnBrowserView.swift`: Genre → Artist →
+  Album panes above a filtered `TrackTableView`; selections narrow panes to the
+  right + the tracks below. Toggle via View menu (⌥⌘B) / `SongsView`.
+- Tests: `QueueEditingTests` (7) added; full suite green.
+
+### Remaining for M4 / to verify
+- 🔬 Gapless seam (no gap/overlap) on a real gapless album — device-only.
+- 🔬 Sample-rate change across tracks (44.1↔48 k) audibly clean — device-only.
+- 🔬 Magic-cookie formats (AAC-in-MP4) — `AVAudioConverter` has no cookie API;
+  ADTS/MP3/FLAC are fine; documented limitation in `03-playback-engine.md`.
 
 ## M3 — Single-track playback + system integration 🚧
 Status: **code-complete & builds clean (25 unit tests pass); runtime audio not
@@ -121,7 +152,7 @@ Status: **UI + data flow working in-memory; SwiftData cache not yet wired.**
 - 🚧 SwiftData persistence layer (`Persistence/`) — currently library data is
   held in memory per `LibraryModel`; the on-disk cache + offset persistence from
   `05-data-and-caching.md` is not yet implemented.
-- 🚧 Column browser (Genre → Artist → Album) — planned for M4 per roadmap.
+- ✅ Column browser (Genre → Artist → Album) — delivered in M4.
 
 ## Known limitations / deferrals
 - ⏳ **Songs view uses `getRandomSongs`** (Subsonic has no "all songs"
@@ -136,7 +167,7 @@ Status: **UI + data flow working in-memory; SwiftData cache not yet wired.**
 
 ## Verification status
 - ✅ `xcodebuild build` succeeds (Debug, arm64, macOS 15 target), no warnings.
-- ✅ `xcodebuild test` — 25/25 passing.
+- ✅ `xcodebuild test` — full suite green (32 test cases; **TEST SUCCEEDED**, 0 failures).
 - ⏳ Live run against a Navidrome server not yet exercised in this environment
   (no server configured); Settings → Test Connection is the entry point, then
   play a track to exercise the M3 audio path.

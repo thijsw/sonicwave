@@ -14,10 +14,13 @@ final class ProgressiveAudioSource: AudioStreamSource {
 
     private var streamID: AudioFileStreamID?
     private var sourceFormat: AVAudioFormat?
-    private var outputFormat: AVAudioFormat?
+    /// Fixed canonical format all tracks decode to, so a single player node can
+    /// play them back-to-back gaplessly (and sample-rate changes are resampled).
+    private let outputFormat: AVAudioFormat
     private var converter: AVAudioConverter?
 
-    init() {
+    init(outputFormat: AVAudioFormat) {
+        self.outputFormat = outputFormat
         let (stream, continuation) = AsyncStream.makeStream(of: SendablePCMBuffer.self)
         self.buffers = stream
         self.continuation = continuation
@@ -72,21 +75,15 @@ final class ProgressiveAudioSource: AudioStreamSource {
         guard AudioFileStreamGetProperty(streamID, kAudioFileStreamProperty_DataFormat, &size, &asbd) == noErr else { return }
         guard let source = AVAudioFormat(streamDescription: &asbd) else { return }
 
-        // Decode to standard deinterleaved float at the source's native rate so
-        // no resampling is needed and the player node format stays stable.
-        guard let output = AVAudioFormat(standardFormatWithSampleRate: source.sampleRate,
-                                         channels: source.channelCount) else { return }
-
         sourceFormat = source
-        outputFormat = output
-        converter = AVAudioConverter(from: source, to: output)
+        converter = AVAudioConverter(from: source, to: outputFormat)
     }
 
     private func handlePackets(numberBytes: UInt32, numberPackets: UInt32,
                                inputData: UnsafeRawPointer,
                                packetDescriptions: UnsafeMutablePointer<AudioStreamPacketDescription>?) {
         guard numberPackets > 0,
-              let sourceFormat, let outputFormat, let converter else { return }
+              let sourceFormat, let converter else { return }
 
         // Build a compressed buffer holding this batch of packets.
         let maxPacketSize: Int
