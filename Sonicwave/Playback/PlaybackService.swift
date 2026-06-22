@@ -45,6 +45,14 @@ actor PlaybackService {
     private var generation = 0
     private var isPaused = false
     private var volume: Float = 1.0
+    /// Whether playback has been started for the current hard-start. Used to
+    /// pre-roll a buffer before starting the node (prevents startup underruns /
+    /// crackle while the network+decoder ramp up).
+    private var hasStartedPlayback = false
+    /// Seconds of audio to buffer before starting playback.
+    private var prerollFrames: AVAudioFramePosition {
+        AVAudioFramePosition(canonicalFormat.sampleRate * 2.0)
+    }
 
     private var decodeTask: Task<Void, Never>?
     private var positionTask: Task<Void, Never>?
@@ -179,6 +187,7 @@ actor PlaybackService {
             engine.connect(node, to: engine.mainMixerNode, format: canonicalFormat)
             engine.mainMixerNode.outputVolume = volume
             engineConnected = true
+            engine.prepare()
             do { try engine.start() } catch {
                 emit(.failed("Audio engine failed to start: \(error.localizedDescription)"))
                 return
@@ -194,12 +203,19 @@ actor PlaybackService {
             Task { await self?.bufferCompleted(gen: gen) }
         }
 
-        if !node.isPlaying && !isPaused {
-            node.play()
-            beginActivity()
-            startPositionUpdates()
-            emit(.stateChanged(.playing))
+        // Pre-roll: only start once enough audio is buffered to avoid underruns.
+        if !hasStartedPlayback && !isPaused && cumulativeFrames >= prerollFrames {
+            startNodePlayback()
         }
+    }
+
+    private func startNodePlayback() {
+        guard !hasStartedPlayback, !isPaused else { return }
+        hasStartedPlayback = true
+        node.play()
+        beginActivity()
+        startPositionUpdates()
+        emit(.stateChanged(.playing))
     }
 
     private func decodeComplete(spanArrayIndex: Int, index: Int, gen: Int) {
@@ -209,6 +225,10 @@ actor PlaybackService {
             emit(.failed("Could not decode this track."))
             emit(.stateChanged(.stopped))
             return
+        }
+        // A track shorter than the pre-roll window: start now rather than wait.
+        if !hasStartedPlayback && !isPaused && cumulativeFrames > 0 {
+            startNodePlayback()
         }
         // Ready to pre-buffer the successor of this track.
         awaitingNext = true
@@ -298,6 +318,7 @@ actor PlaybackService {
         noMoreTracks = false
         awaitingNext = false
         reportedIndex = nil
+        hasStartedPlayback = false
         // Engine stays connected at the canonical format; node.reset() clears
         // the scheduled buffer queue.
     }

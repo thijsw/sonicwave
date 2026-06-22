@@ -36,7 +36,7 @@ struct TrackTableView: View {
             }
 
             TableColumn("Genre", value: \.genreSort) { song in
-                Text(song.genre ?? "—").lineLimit(1).foregroundStyle(.secondary)
+                Text(song.displayGenre ?? "—").lineLimit(1).foregroundStyle(.secondary)
             }
 
             TableColumn("Time", value: \.durationSort) { song in
@@ -85,6 +85,6 @@ func formatTime(_ seconds: TimeInterval) -> String {
 extension Song {
     var artistSort: String { artist ?? "" }
     var albumSort: String { album ?? "" }
-    var genreSort: String { genre ?? "" }
+    var genreSort: String { displayGenre ?? "" }
     var durationSort: Int { duration ?? 0 }
 }

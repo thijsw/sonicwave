@@ -16,9 +16,10 @@ milestone first. See `10-roadmap.md` for the full milestone plan.
   editing the project file.
 
 ## Milestone status
-M0 ✅ · M1 ✅ · M2 🚧 (UI/data in-memory; SwiftData cache pending) ·
-M3 🚧 (code-complete, runtime audio unverified) ·
-M4 🚧 (gapless + queue + column browser code-complete; gapless needs device verification)
+M0 ✅ · M1 ✅ (auth/endpoints live-verified vs Navidrome 0.62) ·
+M2 🚧 (UI/data live-verified; SwiftData cache still pending) ·
+M3 🚧 (decode pipeline live-verified; audio *output* needs a human) ·
+M4 🚧 (gapless code-complete & decode-verified; audible seam needs a human)
 
 ## How to build / test
 ```sh
@@ -167,7 +168,42 @@ Status: **UI + data flow working in-memory; SwiftData cache not yet wired.**
 
 ## Verification status
 - ✅ `xcodebuild build` succeeds (Debug, arm64, macOS 15 target), no warnings.
-- ✅ `xcodebuild test` — full suite green (32 test cases; **TEST SUCCEEDED**, 0 failures).
-- ⏳ Live run against a Navidrome server not yet exercised in this environment
-  (no server configured); Settings → Test Connection is the entry point, then
-  play a track to exercise the M3 audio path.
+- ✅ `xcodebuild test` — full suite green (**TEST SUCCEEDED**, 0 failures).
+
+### Live verification — 2026-06-22, against Navidrome 0.62.0 (real server)
+Validated the networking + decode path end-to-end (opt-in `LiveDecodeTests`,
+skipped unless `SONICWAVE_HOST/USER/PASS` env vars are set — no secrets committed):
+- ✅ **Auth** (token+salt) — `ping` returns ok; password never in the URL.
+- ✅ **Capabilities** — `openSubsonic: true`; extensions include `transcodeOffset`
+  (confirms the `timeOffset` seek approach is supported) + `transcoding`.
+- ✅ **Endpoints decode** — `getAlbumList2`, `getArtists`, `getGenres`,
+  `getRandomSongs`, `getPlaylists`, `getStarred2` all parse (extra
+  Navidrome/OpenSubsonic keys ignored by `Codable`).
+- ✅ **Artwork** — `getCoverArt` returns `image/webp` (NSImage decodes natively
+  on macOS 15).
+- ✅ **Stream** — `audio/mpeg` (MP3) with HTTP range support.
+- ✅ **Transcode + seek** — `format=mp3&maxBitRate=192&timeOffset=30` returns
+  valid MP3.
+- ✅ **Decode pipeline (the spike!)** — a real downloaded MP3 fed through
+  `ProgressiveAudioSource` (AudioFileStream + AVAudioConverter) produced
+  > 1 s of 44.1 kHz canonical PCM. The Option A pipeline works on real data.
+- **Bug found & fixed:** Navidrome 0.62 sends `genres` (array), not the legacy
+  `genre` string → added `GenreRef`/`displayGenre` so the Genre column populates.
+- **Connection robustness:** pasting the browser URL (`…/app`) caused a 404
+  (`/app/rest/ping.view`). `ConnectionModel.normalizedBaseURL` now strips the
+  `/app` SPA suffix + trailing slash/query/fragment and assumes `https://` when
+  the scheme is omitted (a legit reverse-proxy subpath like `/navidrome` is
+  preserved). Covered by `ConnectionTests`.
+
+### Audible playback (on device)
+- ✅ Audio plays end-to-end from Navidrome.
+- 🐛→🔧 **Startup crackle** in the first seconds = buffer underrun (node started
+  on the first decoded buffer). Fixed with a **~2 s pre-roll** before starting
+  the node (also after seeks) + `engine.prepare()` + larger decode-buffer
+  headroom. Re-verifying by ear.
+
+### Still requires a human (audio output / listening)
+- ⏳ Actual sound through an output device (engine → speaker).
+- ⏳ Audible gapless seam on a gapless album; cross-sample-rate transition.
+- ⏳ Now Playing widget + media keys behavior (system UI).
+- App is launchable: `open` the Debug build, then Settings → Connection.

@@ -4,6 +4,12 @@ import Foundation
 /// `Sendable` so they cross actor boundaries safely.
 /// See docs/02-opensubsonic-api.md.
 
+/// OpenSubsonic multi-genre entry. Newer servers (e.g. Navidrome 0.62) return a
+/// `genres` array instead of the legacy single `genre` string.
+struct GenreRef: Codable, Sendable, Hashable {
+    var name: String
+}
+
 struct Song: Identifiable, Codable, Sendable, Hashable {
     let id: String
     var title: String
@@ -22,12 +28,15 @@ struct Song: Identifiable, Codable, Sendable, Hashable {
     var contentType: String?
     var size: Int?
     var starred: Date?
+    var genres: [GenreRef]?
 
     var isStarred: Bool { starred != nil }
+    /// Genre for display, preferring the legacy field, then the OpenSubsonic array.
+    var displayGenre: String? { genre ?? genres?.first?.name }
 
     enum CodingKeys: String, CodingKey {
         case id, title, artist, artistId, album, albumId, coverArt, duration
-        case track, discNumber, year, genre, bitRate, suffix, contentType, size, starred
+        case track, discNumber, year, genre, genres, bitRate, suffix, contentType, size, starred
     }
 }
 
@@ -41,10 +50,12 @@ struct Album: Identifiable, Codable, Sendable, Hashable {
     var duration: Int?
     var year: Int?
     var genre: String?
+    var genres: [GenreRef]?
     var starred: Date?
     var song: [Song]?
 
     var isStarred: Bool { starred != nil }
+    var displayGenre: String? { genre ?? genres?.first?.name }
 }
 
 struct Artist: Identifiable, Codable, Sendable, Hashable {

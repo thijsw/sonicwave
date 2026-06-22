@@ -111,7 +111,7 @@ final class ProgressiveAudioSource: AudioStreamSource {
             ? Double(numberPackets) * Double(framesPerPacket)
             : Double(numberPackets) * 1024
         let ratio = outputFormat.sampleRate / sourceFormat.sampleRate
-        let capacity = AVAudioFrameCount(estFrames * ratio) + 4096
+        let capacity = AVAudioFrameCount(estFrames * ratio) + 16_384
         guard let pcm = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: capacity) else { return }
 
         var provided = false

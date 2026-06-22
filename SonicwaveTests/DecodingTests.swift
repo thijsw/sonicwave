@@ -54,6 +54,20 @@ struct DecodingTests {
         #expect(playlist.entry?[1].title == "Track Two")
     }
 
+    @Test func decodesOpenSubsonicGenresArray() throws {
+        // Navidrome 0.62 omits the legacy `genre` string and sends `genres`.
+        let json = """
+        {"subsonic-response":{"status":"ok","version":"1.16.1","randomSongs":{"song":[
+        {"id":"s1","title":"Track","artist":"A","duration":200,
+        "genres":[{"name":"Jazz"},{"name":"Bebop"}]}]}}}
+        """
+        let data = Data(json.utf8)
+        let wrapper = try decoder.decode(SubsonicResponseWrapper<RandomSongsBody>.self, from: data)
+        let song = try #require(wrapper.response.body?.randomSongs.song?.first)
+        #expect(song.genre == nil)
+        #expect(song.displayGenre == "Jazz")
+    }
+
     @Test func decodesDatesWithoutFractionalSeconds() throws {
         let json = """
         {"subsonic-response":{"status":"ok","version":"1.16.1","album":{

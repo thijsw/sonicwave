@@ -52,9 +52,30 @@ final class ConnectionModel {
 
     /// Build credentials from the current form, or nil if the form is invalid.
     private func formCredentials() -> ServerCredentials? {
-        let trimmed = serverAddress.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let url = URL(string: trimmed), url.scheme != nil else { return nil }
+        guard let url = Self.normalizedBaseURL(from: serverAddress) else { return nil }
         return ServerCredentials(baseURL: url, username: username, secret: secret, authMethod: authMethod)
+    }
+
+    /// Normalize a user-entered server address into a clean API base URL:
+    /// assume `https://` when no scheme is given, and drop query/fragment, any
+    /// trailing slash, and Navidrome's `/app` web-UI suffix (a common
+    /// copy-from-browser mistake that would make requests 404). A legitimate
+    /// reverse-proxy subpath (e.g. `/navidrome`) is preserved.
+    static func normalizedBaseURL(from raw: String) -> URL? {
+        var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+        if !text.contains("://") { text = "https://" + text }
+        guard var comps = URLComponents(string: text), comps.scheme != nil, comps.host != nil else {
+            return nil
+        }
+        comps.query = nil
+        comps.fragment = nil
+        var path = comps.path
+        while path.hasSuffix("/") { path.removeLast() }
+        if path.hasSuffix("/app") { path.removeLast("/app".count) }
+        while path.hasSuffix("/") { path.removeLast() }
+        comps.path = path
+        return comps.url
     }
 
     /// Verify the current form against the server without persisting.
