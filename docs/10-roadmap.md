@@ -5,7 +5,10 @@ shippable-internally increment. The hardest item — streaming gapless via
 `AVAudioEngine` — is isolated as a spike (M4) and de-risked by landing simpler
 playback first (M3).
 
-## M0 — Foundation
+> **Live status:** M0 ✅ · M1 ✅ · M2 🚧 (UI/data in-memory; SwiftData cache
+> pending). See `PROGRESS.md` for the detailed build log.
+
+## M0 — Foundation ✅
 - Create the Xcode app project (macOS 15 deployment, Swift 6 language mode,
   Xcode 26 SDK), folder groups per `01`, unit-test + UI-test targets.
 - App Sandbox + `network.client` entitlement; Hardened Runtime; Info.plist
@@ -16,7 +19,7 @@ playback first (M3).
 - **Exit:** app launches, builds against macOS 15 SDK, opens an empty shell +
   Settings; credentials persist to Keychain.
 
-## M1 — Connectivity & auth
+## M1 — Connectivity & auth ✅
 - `SubsonicClient` (actor) + request builder + envelope decoding + error map.
 - token+salt auth; API-key auth where supported; `getOpenSubsonicExtensions`
   capability detection — `02`.
@@ -25,7 +28,7 @@ playback first (M3).
 - **Exit:** Test Connection succeeds against a Navidrome server; auth failures
   surface a clear re-auth path.
 
-## M2 — Library browse
+## M2 — Library browse 🚧
 - `LibraryStore` (SwiftData) + paginated fetch for Albums/Artists/Songs/Genres
   — `05`/`02`.
 - Sidebar (Library group), dense sortable `Table`, basic now-playing header

@@ -1,0 +1,69 @@
+import SwiftUI
+
+/// Persistent now-playing header pinned to the bottom of the main window:
+/// artwork, track info, scrubber, and transport controls. See docs/04-ui-ux.md.
+struct NowPlayingBar: View {
+    @Environment(PlayerModel.self) private var player
+
+    var body: some View {
+        @Bindable var player = player
+        VStack(spacing: 0) {
+            Divider()
+            HStack(spacing: 14) {
+                ArtworkView(coverArt: player.currentTrack?.coverArt, size: 44, cornerRadius: 6)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(player.currentTrack?.title ?? "Not Playing")
+                        .font(.callout).bold().lineLimit(1)
+                    Text(player.currentTrack?.artist ?? "—")
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+                .frame(width: 200, alignment: .leading)
+
+                transport
+
+                scrubber
+
+                Spacer(minLength: 8)
+
+                HStack(spacing: 6) {
+                    Image(systemName: "speaker.fill").foregroundStyle(.secondary).font(.caption)
+                    Slider(value: $player.volume, in: 0...1)
+                        .frame(width: 90)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+        }
+        .background(.bar)
+    }
+
+    private var transport: some View {
+        HStack(spacing: 18) {
+            Button { player.previous() } label: { Image(systemName: "backward.fill") }
+            Button { player.togglePlayPause() } label: {
+                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.title3)
+            }
+            Button { player.next() } label: { Image(systemName: "forward.fill") }
+        }
+        .buttonStyle(.borderless)
+        .disabled(player.currentTrack == nil)
+    }
+
+    private var scrubber: some View {
+        @Bindable var player = player
+        return HStack(spacing: 8) {
+            Text(formatTime(player.position)).font(.caption2).monospacedDigit()
+                .foregroundStyle(.secondary).frame(width: 38, alignment: .trailing)
+            Slider(value: Binding(
+                get: { player.position },
+                set: { player.seek(to: $0) }
+            ), in: 0...max(player.duration, 1))
+            .frame(minWidth: 160)
+            Text(formatTime(player.duration)).font(.caption2).monospacedDigit()
+                .foregroundStyle(.secondary).frame(width: 38, alignment: .leading)
+        }
+        .disabled(player.currentTrack == nil)
+    }
+}
