@@ -4,6 +4,9 @@ import SwiftUI
 /// artwork, track info, scrubber, and transport controls. See docs/04-ui-ux.md.
 struct NowPlayingBar: View {
     @Environment(PlayerModel.self) private var player
+    /// Holds the in-progress scrub position so we seek once on release, not on
+    /// every value change (seeking re-opens the stream — see docs/03).
+    @State private var scrubValue: Double?
 
     var body: some View {
         @Bindable var player = player
@@ -52,14 +55,18 @@ struct NowPlayingBar: View {
     }
 
     private var scrubber: some View {
-        @Bindable var player = player
-        return HStack(spacing: 8) {
-            Text(formatTime(player.position)).font(.caption2).monospacedDigit()
+        HStack(spacing: 8) {
+            Text(formatTime(scrubValue ?? player.position)).font(.caption2).monospacedDigit()
                 .foregroundStyle(.secondary).frame(width: 38, alignment: .trailing)
             Slider(value: Binding(
-                get: { player.position },
-                set: { player.seek(to: $0) }
-            ), in: 0...max(player.duration, 1))
+                get: { scrubValue ?? player.position },
+                set: { scrubValue = $0 }
+            ), in: 0...max(player.duration, 1), onEditingChanged: { editing in
+                if !editing, let value = scrubValue {
+                    player.seek(to: value)
+                    scrubValue = nil
+                }
+            })
             .frame(minWidth: 160)
             Text(formatTime(player.duration)).font(.caption2).monospacedDigit()
                 .foregroundStyle(.secondary).frame(width: 38, alignment: .leading)

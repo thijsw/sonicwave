@@ -62,11 +62,13 @@ actor SubsonicClient {
 
     /// Builds an authenticated streaming URL for the given song id. Honors the
     /// transcoding settings (format/maxBitRate) when provided.
-    func streamURL(songId: String, format: String? = nil, maxBitRate: Int? = nil) throws(SubsonicError) -> URL {
+    func streamURL(songId: String, format: String? = nil, maxBitRate: Int? = nil,
+                   timeOffset: Int? = nil) throws(SubsonicError) -> URL {
         guard let creds = credentials.load() else { throw SubsonicError.notConfigured }
         var items: [URLQueryItem] = [.init(name: "id", value: songId)]
         if let format { items.append(.init(name: "format", value: format)) }
         if let maxBitRate { items.append(.init(name: "maxBitRate", value: String(maxBitRate))) }
+        if let timeOffset { items.append(.init(name: "timeOffset", value: String(timeOffset))) }
         do {
             return try url(for: Endpoint("stream", items), using: creds)
         } catch let error as SubsonicError {

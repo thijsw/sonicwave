@@ -15,6 +15,10 @@ milestone first. See `10-roadmap.md` for the full milestone plan.
   under `Sonicwave/` and `SonicwaveTests/` are picked up automatically without
   editing the project file.
 
+## Milestone status
+M0 ✅ · M1 ✅ · M2 🚧 (UI/data in-memory; SwiftData cache pending) ·
+M3 🚧 (code-complete, runtime audio unverified)
+
 ## How to build / test
 ```sh
 xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
@@ -56,6 +60,44 @@ Status: **complete, builds clean, 18 unit tests passing.**
   both methods, transcoding params, envelope/model/date decoding, failed-status
   → error, queue/transport logic.
 
+## M3 — Single-track playback + system integration 🚧
+Status: **code-complete & builds clean (25 unit tests pass); runtime audio not
+yet verified** (needs a live Navidrome server + audio device — unavailable in
+this headless env).
+- **Decision:** Option A (progressive decode) is the committed streaming source
+  (see `03-playback-engine.md`). Option B kept as fallback.
+- `Playback/PlaybackService.swift` — actor owning `AVAudioEngine` + one
+  `AVAudioPlayerNode`. Drives loader → decoder → buffer scheduling. Play / pause
+  / resume / seek / stop / volume; sample-time position throttled to ~5 Hz via an
+  `AsyncStream<PlaybackEvent>`; App Nap / idle-sleep prevented via
+  `ProcessInfo.beginActivity` while playing; lazy engine connect at the decoded
+  format; teardown releases per-track resources.
+- `Playback/DataStreamLoader.swift` — `URLSession` data-delegate → chunked
+  `AsyncThrowingStream<Data>` (audio starts before full download).
+- `Playback/ProgressiveAudioSource.swift` — Audio File Stream Services parser +
+  `AVAudioConverter` producing `AVAudioPCMBuffer`s; format auto-detect + suffix
+  hint; `SendablePCMBuffer` ownership transfer.
+- `Playback/AudioStreamSource.swift` — protocol seam so Option B is droppable-in.
+- `Services/NowPlayingCenter.swift` — `MPNowPlayingInfoCenter` metadata/artwork/
+  elapsed + `MPRemoteCommandCenter` (play/pause/toggle/next/prev/seek) → **media
+  keys**. Single writer to the system center.
+- `Models/PlayerModel.swift` — rewritten to forward intent to `PlaybackService`
+  and drive `state`/`position` from its events, while keeping queue/transport
+  bookkeeping synchronous (so unit tests need no engine). Wires remote-command
+  callbacks; pushes Now Playing metadata + async artwork.
+- `App/AppModel.swift` — constructs and injects `PlaybackService` +
+  `NowPlayingCenter`.
+- Seek re-opens the stream with `timeOffset` (Option A has no random access);
+  scrubbers in `NowPlayingBar`/`MenuBarPanel` seek once on release, not per drag.
+- Tests added: `PlaybackConfigTests` (transcode prefs, `timeOffset` URL, file
+  type hint) + existing `PlayerQueueTests` still green after the refactor.
+
+### Remaining for M3 / to verify
+- 🔬 Runtime: play/pause/seek a real track; confirm Now Playing widget + media
+  keys; artwork + elapsed time. Needs live server.
+- 🔬 Magic-cookie handling (AAC/ALAC) and seek accuracy are flagged for the M4
+  spike (see `03-playback-engine.md`).
+
 ## M2 — Library browse 🚧
 Status: **UI + data flow working in-memory; SwiftData cache not yet wired.**
 - `Networking/SubsonicModels.swift` value types (Song/Album/Artist/Genre/Playlist);
@@ -93,7 +135,8 @@ Status: **UI + data flow working in-memory; SwiftData cache not yet wired.**
   packaging — all per roadmap M2–M8.
 
 ## Verification status
-- ✅ `xcodebuild build` succeeds (Debug, arm64, macOS 15 target).
-- ✅ `xcodebuild test` — 18/18 passing.
+- ✅ `xcodebuild build` succeeds (Debug, arm64, macOS 15 target), no warnings.
+- ✅ `xcodebuild test` — 25/25 passing.
 - ⏳ Live run against a Navidrome server not yet exercised in this environment
-  (no server configured); Settings → Test Connection is the entry point.
+  (no server configured); Settings → Test Connection is the entry point, then
+  play a track to exercise the M3 audio path.

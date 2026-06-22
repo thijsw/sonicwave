@@ -39,31 +39,36 @@ float stereo) so a single connection format suffices, and use the second node
 purely to overlap load/schedule of N+1. Decide canonical-format-vs-reconnect in
 the spike.
 
-## Streaming decode source 🔬 (the key spike — see roadmap M4)
+## Streaming decode source ✅ (decision: Option A — progressive decode)
 
 We need compressed audio (mp3/aac/opus/flac/…) from an HTTP `stream` URL turned
-into PCM `AVAudioPCMBuffer`s to schedule. Two designs:
+into PCM `AVAudioPCMBuffer`s to schedule. Two designs were considered;
+**Option A is the committed approach** (decided 2026-06-22). Option B is kept on
+record as a fallback if A's edge cases prove too costly.
 
-### Option A — Progressive decode (principled, low memory) 🔬
-- Fetch bytes incrementally via `URLSession` bytes/delegate.
+### Option A — Progressive decode (principled, low memory) ✅ (CHOSEN for v1)
+- Fetch bytes incrementally via `URLSession` (data-delegate → `AsyncStream<Data>`).
 - Parse container/packets with **Audio File Stream Services**
   (`AudioFileStreamOpen`/`ParseBytes`) to get audio packets + format.
-- Convert compressed packets → PCM with **`AVAudioConverter`** (or
-  `AudioConverter`), producing `AVAudioPCMBuffer`s.
+- Convert compressed packets → PCM with **`AVAudioConverter`**, producing
+  `AVAudioPCMBuffer`s.
 - Schedule buffers on the player node as they're produced, keeping only a small
   ring of buffers in memory → smallest footprint, true streaming.
-- Most complex (Core Audio C APIs, packet/format edge cases, seeking).
+- Most complex (Core Audio C APIs, packet/format edge cases, seeking) — this is
+  the project's key spike.
 
-### Option B — Temp-file staging (pragmatic fallback) 🔶
+### Option B — Temp-file staging ⏳ (fallback, not the v1 path)
 - `URLSession` download the stream to an ephemeral temp file (disk, not RAM).
 - Once enough is staged, read PCM in chunks via `AVAudioFile` and schedule.
-- Simpler and robust; uses disk (ephemeral, acceptable since "no caching"
-  refers to *persistent* offline caching). Slightly higher latency to first
+- Simpler and robust; uses disk (ephemeral). Slightly higher latency to first
   audio; seeking is easy (read from offset).
 
-**Recommendation:** prototype **B first** to land gapless + Now Playing quickly
-(M3/M4), then evaluate **A** to cut memory/latency if needed. Encapsulate both
-behind a `protocol AudioStreamSource` so the engine code is agnostic:
+**Decision (2026-06-22):** ship **Option A** (progressive decode) for v1.
+Known rough edges to harden during the M4 spike: compressed-format **magic
+cookie** handling (AAC/ALAC), and **seek** (pure forward streaming has no random
+access — seek is implemented by re-opening the stream at a `timeOffset`/byte
+range, see Seeking below). The engine code stays agnostic behind a
+`protocol AudioStreamSource`, so Option B remains droppable-in if needed:
 
 ```
 protocol AudioStreamSource: Sendable {
@@ -88,14 +93,19 @@ release).
 - Roles of node A/B swap each track. The just-finished source is torn down and
   its buffers/temp file released.
 
-## Seeking ✅
+## Seeking ✅ (Option A approach)
 
-- `seek(to:)` stops scheduling, asks the source to seek (Option A: re-prime
-  converter at packet near offset; Option B: read from byte/frame offset),
-  reschedules from the new position, and updates `PlayerModel.position` +
-  Now Playing elapsed time. Seeking is **local** (we control the buffer
-  stream), avoiding server round-trips except where transcoding forces a
-  server-side `timeOffset`.
+Pure forward streaming has no random access, so `seek(to:)` **re-opens the
+stream at the target offset**:
+- Tear down the current source/player scheduling, reset the position base to the
+  seek time.
+- Re-request `stream` with `timeOffset` (seconds) — supported by Navidrome for
+  transcoded streams — and resume progressive decode from there. (HTTP `Range`
+  is the fallback where the server honors byte ranges.)
+- Update `PlayerModel.position` + Now Playing elapsed time to the seek target.
+
+This is heavier than local seeking but is the only reliable option for forward
+streams; accuracy/latency are part of the M4 spike checklist.
 
 ## Position updates — throttled ✅
 

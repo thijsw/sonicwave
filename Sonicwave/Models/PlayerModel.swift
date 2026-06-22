@@ -14,11 +14,12 @@ enum RepeatMode: String, Sendable, CaseIterable {
 
 /// Central source of truth for everything "now playing": current track, the
 /// Up Next queue, transport state and position. Observed by the main window,
-/// the menu-bar panel, and (later) the system Now Playing center.
+/// the menu-bar panel, and the system Now Playing center.
 ///
-/// The actual audio engine arrives in M3 (docs/03-playback-engine.md); for now
-/// this model owns the queue/transport state and exposes intent methods that
-/// the playback service will be wired into.
+/// Queue/transport bookkeeping is synchronous and engine-independent (so it's
+/// unit-testable without audio). When a `PlaybackService` is injected, intent is
+/// forwarded to it and its `events` drive `state`/`position`. See
+/// docs/01-architecture.md and docs/03-playback-engine.md.
 @MainActor
 @Observable
 final class PlayerModel {
@@ -30,25 +31,36 @@ final class PlayerModel {
     private(set) var state: PlaybackState = .stopped
     var position: TimeInterval = 0
     var duration: TimeInterval = 0
+    private(set) var lastError: String?
 
     var repeatMode: RepeatMode = .off
     var shuffle: Bool = false
-    var volume: Double = 1.0
+    var volume: Double = 1.0 {
+        didSet { forward { await $0.setVolume(self.volume) } }
+    }
 
     var isPlaying: Bool { state == .playing }
 
+    @ObservationIgnored private let playback: PlaybackService?
+    @ObservationIgnored private let nowPlaying: NowPlayingCenter?
+    @ObservationIgnored private var eventTask: Task<Void, Never>?
+
+    init(playback: PlaybackService? = nil, nowPlaying: NowPlayingCenter? = nil) {
+        self.playback = playback
+        self.nowPlaying = nowPlaying
+        if let playback { startEventLoop(playback) }
+        wireRemoteCommands()
+    }
+
     // MARK: - Queue management
 
-    /// Replace the queue and start at the given index.
+    /// Replace the queue and start playing at the given index.
     func play(tracks: [Song], startAt index: Int = 0) {
         guard !tracks.isEmpty, tracks.indices.contains(index) else { return }
         queue = tracks
-        currentIndex = index
-        currentTrack = tracks[index]
-        duration = TimeInterval(tracks[index].duration ?? 0)
-        position = 0
+        setCurrent(index)
         state = .playing
-        // TODO(M3): hand off to PlaybackService.
+        loadCurrent()
     }
 
     func playNext(_ tracks: [Song]) {
@@ -60,14 +72,24 @@ final class PlayerModel {
         queue.append(contentsOf: tracks)
     }
 
-    // MARK: - Transport (stubbed until M3)
+    // MARK: - Transport
 
     func togglePlayPause() {
         switch state {
-        case .playing: state = .paused
-        case .paused, .stopped: state = currentTrack == nil ? .stopped : .playing
-        case .buffering: break
+        case .playing:
+            state = .paused
+            forward { await $0.pause() }
+        case .paused:
+            state = .playing
+            forward { await $0.resume() }
+        case .stopped:
+            guard currentTrack != nil else { return }
+            state = .playing
+            loadCurrent()
+        case .buffering:
+            break
         }
+        syncNowPlayingState()
     }
 
     func next() {
@@ -79,34 +101,129 @@ final class PlayerModel {
             advance(to: 0)
         } else {
             state = .stopped
+            forward { await $0.stop() }
         }
     }
 
     func previous() {
         guard let index = currentIndex else { return }
         if position > 3 {
-            position = 0
+            seek(to: 0)
             return
         }
         let prevIndex = index - 1
         if queue.indices.contains(prevIndex) {
             advance(to: prevIndex)
         } else {
-            position = 0
+            seek(to: 0)
         }
     }
 
     func seek(to time: TimeInterval) {
         position = max(0, min(time, duration))
-        // TODO(M3): forward to PlaybackService.
+        let target = position
+        forward { await $0.seek(to: target) }
     }
 
-    private func advance(to index: Int) {
+    // MARK: - Internal transitions
+
+    private func setCurrent(_ index: Int) {
         guard queue.indices.contains(index) else { return }
         currentIndex = index
         currentTrack = queue[index]
         duration = TimeInterval(queue[index].duration ?? 0)
         position = 0
+    }
+
+    private func advance(to index: Int) {
+        guard queue.indices.contains(index) else { return }
+        setCurrent(index)
         state = .playing
+        loadCurrent()
+    }
+
+    private func loadCurrent() {
+        guard let track = currentTrack else { return }
+        updateNowPlayingTrack()
+        let id = track.id
+        let suffix = track.suffix
+        let dur = TimeInterval(track.duration ?? 0)
+        forward { await $0.load(songId: id, suffix: suffix, duration: dur) }
+    }
+
+    /// Natural end of the current track (from the engine), distinct from a
+    /// manual skip: honors repeat-one.
+    private func handleTrackEnded() {
+        if repeatMode == .one {
+            seek(to: 0)
+            return
+        }
+        next()
+    }
+
+    // MARK: - Event loop
+
+    private func startEventLoop(_ playback: PlaybackService) {
+        eventTask = Task { [weak self] in
+            for await event in playback.events {
+                self?.handle(event)
+            }
+        }
+    }
+
+    private func handle(_ event: PlaybackEvent) {
+        switch event {
+        case let .stateChanged(newState):
+            state = newState
+            syncNowPlayingState()
+        case let .position(time, dur):
+            position = time
+            if dur > 0 { duration = dur }
+            nowPlaying?.updateProgress(position: position, duration: duration, state: state)
+        case .ended:
+            handleTrackEnded()
+        case let .failed(message):
+            lastError = message
+            state = .stopped
+        }
+    }
+
+    // MARK: - Now Playing
+
+    private func updateNowPlayingTrack() {
+        nowPlaying?.update(track: currentTrack, state: state, position: position, duration: duration)
+        guard let coverArt = currentTrack?.coverArt else { return }
+        Task { [weak self] in
+            let image = await ArtworkCache.shared.image(coverArt: coverArt, size: 600)
+            self?.nowPlaying?.updateArtwork(image)
+        }
+    }
+
+    private func syncNowPlayingState() {
+        nowPlaying?.update(track: currentTrack, state: state, position: position, duration: duration)
+    }
+
+    private func wireRemoteCommands() {
+        guard let nowPlaying else { return }
+        nowPlaying.onPlay = { [weak self] in
+            guard let self, self.state != .playing else { return }
+            self.togglePlayPause()
+        }
+        nowPlaying.onPause = { [weak self] in
+            guard let self, self.state == .playing else { return }
+            self.togglePlayPause()
+        }
+        nowPlaying.onTogglePlayPause = { [weak self] in self?.togglePlayPause() }
+        nowPlaying.onNext = { [weak self] in self?.next() }
+        nowPlaying.onPrevious = { [weak self] in self?.previous() }
+        nowPlaying.onSeek = { [weak self] time in self?.seek(to: time) }
+    }
+
+    // MARK: - Helpers
+
+    /// Forward intent to the playback service if present (no-op in tests).
+    private func forward(_ action: @escaping @Sendable (PlaybackService) async -> Void) {
+        guard let playback else { return }
+        Task { await action(playback) }
     }
 }

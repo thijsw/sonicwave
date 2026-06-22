@@ -19,16 +19,22 @@ final class AppModel {
     // Services (not observed directly by views).
     let credentials: CredentialStore
     let client: SubsonicClient
+    let playback: PlaybackService
+    let nowPlaying: NowPlayingCenter
 
     init() {
         let credentials = KeychainCredentialStore()
         let client = SubsonicClient(credentials: credentials)
+        let playback = PlaybackService(client: client)
+        let nowPlaying = NowPlayingCenter()
 
         self.credentials = credentials
         self.client = client
+        self.playback = playback
+        self.nowPlaying = nowPlaying
         self.connection = ConnectionModel(client: client, credentials: credentials)
         self.library = LibraryModel(client: client)
-        self.player = PlayerModel()
+        self.player = PlayerModel(playback: playback, nowPlaying: nowPlaying)
 
         // Give the shared artwork cache access to the authenticated client.
         ArtworkCache.shared.clientBox = ClientBox(client)

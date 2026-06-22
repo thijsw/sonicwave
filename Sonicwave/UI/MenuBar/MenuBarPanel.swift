@@ -5,9 +5,9 @@ import SwiftUI
 /// PlayerModel as the main window. See docs/04-ui-ux.md.
 struct MenuBarPanel: View {
     @Environment(PlayerModel.self) private var player
+    @State private var scrubValue: Double?
 
     var body: some View {
-        @Bindable var player = player
         VStack(spacing: 12) {
             ArtworkView(coverArt: player.currentTrack?.coverArt, size: 160, cornerRadius: 10)
                 .shadow(radius: 4, y: 2)
@@ -20,9 +20,14 @@ struct MenuBarPanel: View {
             }
 
             Slider(value: Binding(
-                get: { player.position },
-                set: { player.seek(to: $0) }
-            ), in: 0...max(player.duration, 1))
+                get: { scrubValue ?? player.position },
+                set: { scrubValue = $0 }
+            ), in: 0...max(player.duration, 1), onEditingChanged: { editing in
+                if !editing, let value = scrubValue {
+                    player.seek(to: value)
+                    scrubValue = nil
+                }
+            })
             .disabled(player.currentTrack == nil)
 
             HStack(spacing: 28) {

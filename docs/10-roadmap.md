@@ -6,7 +6,8 @@ shippable-internally increment. The hardest item — streaming gapless via
 playback first (M3).
 
 > **Live status:** M0 ✅ · M1 ✅ · M2 🚧 (UI/data in-memory; SwiftData cache
-> pending). See `PROGRESS.md` for the detailed build log.
+> pending) · M3 🚧 (code-complete & tested; runtime audio unverified — needs a
+> live server). See `PROGRESS.md` for the detailed build log.
 
 ## M0 — Foundation ✅
 - Create the Xcode app project (macOS 15 deployment, Swift 6 language mode,
@@ -36,9 +37,9 @@ playback first (M3).
 - **Exit:** browse a large library smoothly with pagination; sort columns;
   scroll stays fluid; memory bounded.
 
-## M3 — Single-track playback + system integration
-- `PlaybackService` + `AVAudioEngine` graph playing **one track** (Option B
-  temp-file staging first) — `03`.
+## M3 — Single-track playback + system integration 🚧
+- `PlaybackService` + `AVAudioEngine` graph playing **one track** (Option A
+  progressive decode — committed decision) — `03`.
 - `PlayerModel` intent (play/pause/seek), throttled position, now-playing header
   functional.
 - `MPNowPlayingInfoCenter` + `MPRemoteCommandCenter` + media keys; App Nap
@@ -47,9 +48,9 @@ playback first (M3).
   artwork + elapsed time correct.
 
 ## M4 — Gapless + queue + column browser 🔬 (highest risk)
-- **Spike:** streaming **gapless** with dual player nodes + pre-buffering
-  (Option B; evaluate Option A progressive decode if memory/latency needs it) —
-  `03`. Meet the M4 spike checklist in `03`.
+- **Spike:** streaming **gapless** with dual player nodes + pre-buffering on the
+  committed Option A progressive-decode pipeline; also harden Option A's known
+  rough edges (magic cookie, seek accuracy) — `03`. Meet the M4 spike checklist.
 - Up Next / queue (reorder, remove, play-from-here) — `04`.
 - Column browser (Genre → Artist → Album) — `04`.
 - **Exit:** gapless verified on a gapless album; sample-rate change handled;
@@ -87,7 +88,7 @@ playback first (M3).
 
 | Risk | Milestone | Mitigation |
 | --- | --- | --- |
-| Streaming gapless decode complexity (Core Audio / format changes) | M4 | Isolated spike; ship Option B (temp-file) first; protocol-abstract the source; M4 checklist gates |
+| Streaming gapless decode complexity (Core Audio / format changes) | M3/M4 | Committed to Option A progressive decode; `AudioStreamSource` protocol keeps Option B droppable-in; M4 checklist gates; magic-cookie/seek hardening tracked |
 | API-key auth availability varies by server | M1 | Capability detection; token+salt fallback |
 | Output-device/route-change engine rebuilds cause glitches | M6 | Observe config-change + Core Audio listeners; rebuild + resume; manual test matrix |
 | Subsonic JSON quirks (single-vs-array, string numbers) | M1 | Tolerant decoders + recorded fixtures (`08`) |
