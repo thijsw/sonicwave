@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import os
 
 /// Owns the `AVAudioEngine` graph and drives the Option A progressive decode
 /// pipeline. Achieves **gapless** playback by decoding every track to one
@@ -14,6 +15,8 @@ import AVFoundation
 /// - As playback crosses a track boundary the service emits `.trackChanged`.
 /// - `.ended` fires only when the final track finishes with no successor.
 actor PlaybackService {
+    private static let log = Logger(subsystem: "nl.huell.sonicwave", category: "playback")
+
     let events: AsyncStream<PlaybackEvent>
     private let continuation: AsyncStream<PlaybackEvent>.Continuation
 
@@ -238,10 +241,17 @@ actor PlaybackService {
     private func bufferCompleted(gen: Int) {
         guard gen == generation else { return }
         outstandingBuffers -= 1
-        if outstandingBuffers <= 0 && noMoreTracks && allDecodeComplete {
+        guard outstandingBuffers <= 0 else { return }
+        if noMoreTracks && allDecodeComplete {
             stopPositionUpdates()
             if let last = spans.last { emit(.position(time: last.duration, duration: last.duration)) }
             emit(.ended)
+        } else if hasStartedPlayback {
+            // Every scheduled buffer has finished playing but more audio is still
+            // expected (decode/network hasn't kept up): the node will now render
+            // silence until the next buffer arrives — an underrun heard as a
+            // gap/crackle. Logged so the cause can be confirmed at runtime.
+            Self.log.warning("audio underrun: player node starved (no buffers scheduled, more audio pending)")
         }
     }
 

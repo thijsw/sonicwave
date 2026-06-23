@@ -304,10 +304,44 @@ skipped unless `SONICWAVE_HOST/USER/PASS` env vars are set — no secrets commit
 
 ### Audible playback (on device)
 - ✅ Audio plays end-to-end from Navidrome.
-- 🐛→🔧 **Startup crackle** in the first seconds = buffer underrun (node started
-  on the first decoded buffer). Fixed with a **~2 s pre-roll** before starting
-  the node (also after seeks) + `engine.prepare()` + larger decode-buffer
-  headroom. Re-verifying by ear.
+- 🔬 **Crackle investigation (evidence-based).** Rather than enlarge buffers:
+  - **Decode/convert exonerated.** A self-contained test (`DecodeContinuityTests`)
+    encodes a pure sine → AAC/ADTS → decodes it through the *real*
+    `ProgressiveAudioSource` and measures sample-to-sample steps: the max interior
+    step (~0.0324) equals the sine's natural slope (~0.0313) → **no glitches /
+    sample corruption** in the per-batch conversion. (The synthetic ADTS stream
+    under-decodes — an AudioFileStream/ADTS harness quirk — so real-file
+    completeness + boundary continuity is covered by the extended `LiveDecodeTests`
+    instead.)
+  - **Found & fixed a real bug:** the converter's tail was never flushed —
+    `ProgressiveAudioSource.finish()` now runs a final `.endOfStream` conversion
+    (`flushDecoder()`) so the end of each track isn't dropped (clipped endings /
+    gapless-seam clicks).
+  - **Runtime underrun detector:** `PlaybackService` logs (os.Logger, category
+    `playback`) when the player node starves. In a captured Console log it
+    **never fired** → the crackle was *not* underrun.
+  - 🐛→✅ **ROOT CAUSE FOUND (from the Console log):** repeated
+    `AVAudioCompressedBuffer initWithFormat … required condition is false:
+    (!(fmt.IsLinearPCM()…))`. `ProgressiveAudioSource` always wrapped packets in
+    an `AVAudioCompressedBuffer`, but for **uncompressed (linear-PCM) sources —
+    WAV/AIFF —** that buffer is invalid, so those tracks decoded to garbage →
+    crackle. Matches the symptom exactly (only *some* songs cracked). **Fix:**
+    when the source format is linear PCM, wrap the frames in an `AVAudioPCMBuffer`
+    instead (compressed path unchanged). Verified clean build + tests.
+  - Earlier mitigation (~2 s pre-roll + `engine.prepare()`) remains.
+- 🐛→✅ **ROOT CAUSE of the remaining single click (~1 s into PCM tracks).** After
+  the PCM fix, AIFF still produced one reproducible click. Traced with a render
+  tap (output data was clean — `maxStep 0.157`, no discontinuity) + unified-log
+  correlation: a single `HALC_ProxyIOContext … skipping cycle due to overload`
+  fired ~1 s into playback. The audio **device dropped one IO cycle** (the glitch
+  is after the engine, so not in the rendered samples). Cause: a track decodes
+  *far* faster than real time, so its buffers are scheduled in one big burst —
+  and **linear-PCM (AIFF/WAV) yields ~2× as many buffers** (~2800 for a 3:49
+  track) as compressed, flooding `scheduleBuffer` and starving the IO thread
+  (hence PCM-only). **Fix:** `ProgressiveAudioSource` now **consolidates** the
+  many small per-batch decoder outputs into ~1-second buffers before yielding,
+  cutting `scheduleBuffer` calls ~12×. Verified: the overload no longer appears
+  in the log when playing the AIFF.
 
 ### Still requires a human (audio output / listening)
 - ⏳ Actual sound through an output device (engine → speaker).

@@ -61,12 +61,43 @@ struct LiveDecodeTests {
         }
         source.finish()
 
-        var totalFrames: AVAudioFramePosition = 0
+        // Collect channel-0 PCM and the per-batch boundary indices.
+        var samples: [Float] = []
+        var boundaries: [Int] = []
         for await box in source.buffers {
-            totalFrames += AVAudioFramePosition(box.buffer.frameLength)
             #expect(box.buffer.format.sampleRate == 44_100)
+            if let ch = box.buffer.floatChannelData, box.buffer.frameLength > 0 {
+                boundaries.append(samples.count)
+                samples.append(contentsOf: UnsafeBufferPointer(start: ch[0], count: Int(box.buffer.frameLength)))
+            }
         }
-        // A real track must decode to a meaningful amount of audio.
-        #expect(totalFrames > 44_100) // > ~1 second of PCM
+        #expect(samples.count > 44_100) // > ~1 second of PCM
+        let streamSeconds = Double(samples.count) / 44_100.0
+
+        // Reference: full duration of the same bytes via AVAudioFile.
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sw-ref.\(song.suffix ?? "mp3")")
+        try data.write(to: tmp)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        let refFile = try AVAudioFile(forReading: tmp)
+        let refSeconds = Double(refFile.length) / refFile.fileFormat.sampleRate
+
+        // Completeness: the streaming decode should cover ~the whole track
+        // (validates the end-of-stream flush; catches truncation/dropped tail).
+        #expect(abs(streamSeconds - refSeconds) < 0.5)
+
+        // Continuity: a per-batch boundary must not be glitchier than the natural
+        // interior signal. A dropout/discontinuity at a boundary = crackle.
+        let boundarySet = Set(boundaries)
+        var maxInterior: Float = 0
+        var maxBoundary: Float = 0
+        for n in 1..<samples.count {
+            let step = abs(samples[n] - samples[n - 1])
+            if boundarySet.contains(n) { maxBoundary = max(maxBoundary, step) }
+            else { maxInterior = max(maxInterior, step) }
+        }
+        print("[crackle-live] streamSeconds=\(streamSeconds) refSeconds=\(refSeconds) " +
+              "batches=\(boundaries.count) maxInterior=\(maxInterior) maxBoundary=\(maxBoundary)")
+        #expect(maxBoundary <= maxInterior * 2)
     }
 }

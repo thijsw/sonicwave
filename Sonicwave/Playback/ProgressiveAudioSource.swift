@@ -1,5 +1,6 @@
 @preconcurrency import AVFoundation
 import AudioToolbox
+import os
 
 /// Option A streaming decoder: parses incoming compressed bytes with Audio File
 /// Stream Services and converts packets to PCM with `AVAudioConverter`, emitting
@@ -18,6 +19,16 @@ final class ProgressiveAudioSource: AudioStreamSource {
     /// play them back-to-back gaplessly (and sample-rate changes are resampled).
     private let outputFormat: AVAudioFormat
     private var converter: AVAudioConverter?
+
+    private static let log = Logger(subsystem: "nl.huell.sonicwave", category: "decode")
+    private var decodedFrames: AVAudioFramePosition = 0
+    private var inputFrames: AVAudioFramePosition = 0
+    /// Consolidate the many small per-batch decoder outputs into ~1-second
+    /// buffers before yielding. Scheduling thousands of tiny buffers in a burst
+    /// (a whole track decodes far faster than real time) starves the audio IO
+    /// thread → a dropped cycle → an audible click. Fewer, larger buffers fix it.
+    private let chunkTarget: AVAudioFrameCount = 44_100
+    private var accum: AVAudioPCMBuffer?
 
     init(outputFormat: AVAudioFormat) {
         self.outputFormat = outputFormat
@@ -38,18 +49,77 @@ final class ProgressiveAudioSource: AudioStreamSource {
         guard let streamID else { return }
         data.withUnsafeBytes { raw in
             if let base = raw.baseAddress, !raw.isEmpty {
-                _ = AudioFileStreamParseBytes(streamID, UInt32(raw.count), base,
+                let st = AudioFileStreamParseBytes(streamID, UInt32(raw.count), base,
                                               AudioFileStreamParseFlags(rawValue: 0))
+                if st != noErr { Self.log.error("AudioFileStreamParseBytes failed: \(st)") }
             }
         }
     }
 
     func finish() {
+        flushDecoder()
+        flushAccum()
+        Self.log.debug("decode finished: inputFrames=\(self.inputFrames) decodedFrames=\(self.decodedFrames)")
         continuation.finish()
         if let streamID {
             AudioFileStreamClose(streamID)
             self.streamID = nil
         }
+    }
+
+    /// Drain any PCM the decoder/converter is still holding (codec latency) by
+    /// running one final conversion with `.endOfStream`. Without this the tail of
+    /// each track is silently dropped — audible as a clipped ending / a seam at
+    /// gapless transitions.
+    private func flushDecoder() {
+        guard let converter else { return }
+        guard let pcm = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: 16_384) else { return }
+        var ended = false
+        var error: NSError?
+        let status = converter.convert(to: pcm, error: &error) { _, outStatus in
+            if ended { outStatus.pointee = .noDataNow; return nil }
+            ended = true
+            outStatus.pointee = .endOfStream
+            return nil
+        }
+        if (status == .haveData || status == .endOfStream || status == .inputRanDry) && pcm.frameLength > 0 {
+            emitConsolidated(pcm)
+        }
+    }
+
+    // MARK: - Buffer consolidation
+
+    /// Append small outputs into `accum`, yielding ~1s buffers. Buffers already at
+    /// least the target size pass straight through.
+    private func emitConsolidated(_ pcm: AVAudioPCMBuffer) {
+        if pcm.frameLength >= chunkTarget {
+            flushAccum()
+            yieldBuffer(pcm)
+            return
+        }
+        if accum == nil || (accum!.frameCapacity - accum!.frameLength) < pcm.frameLength {
+            flushAccum()
+            accum = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: chunkTarget + pcm.frameLength)
+            accum?.frameLength = 0
+        }
+        guard let dst = accum else { yieldBuffer(pcm); return }
+        let off = Int(dst.frameLength), n = Int(pcm.frameLength)
+        if let s = pcm.floatChannelData, let d = dst.floatChannelData {
+            for ch in 0..<Int(outputFormat.channelCount) {
+                memcpy(d[ch] + off, s[ch], n * MemoryLayout<Float>.size)
+            }
+            dst.frameLength += pcm.frameLength
+        }
+        if dst.frameLength >= chunkTarget { flushAccum() }
+    }
+
+    private func flushAccum() {
+        if let a = accum, a.frameLength > 0 { yieldBuffer(a) }
+        accum = nil
+    }
+
+    private func yieldBuffer(_ buffer: AVAudioPCMBuffer) {
+        continuation.yield(SendablePCMBuffer(buffer: buffer))
     }
 
     // MARK: - C callbacks (no captured context → convert to C function pointers)
@@ -77,6 +147,8 @@ final class ProgressiveAudioSource: AudioStreamSource {
 
         sourceFormat = source
         converter = AVAudioConverter(from: source, to: outputFormat)
+        let isPCM = asbd.mFormatID == kAudioFormatLinearPCM
+        Self.log.debug("source format id=\(asbd.mFormatID) sr=\(asbd.mSampleRate) pcm=\(isPCM) converter=\(self.converter != nil)")
     }
 
     private func handlePackets(numberBytes: UInt32, numberPackets: UInt32,
@@ -85,31 +157,53 @@ final class ProgressiveAudioSource: AudioStreamSource {
         guard numberPackets > 0,
               let sourceFormat, let converter else { return }
 
-        // Build a compressed buffer holding this batch of packets.
-        let maxPacketSize: Int
-        if let pds = packetDescriptions {
-            var m = 0
-            for i in 0..<Int(numberPackets) { m = max(m, Int(pds[i].mDataByteSize)) }
-            maxPacketSize = max(m, 1)
+        let inputBuffer: AVAudioBuffer
+        let estFrames: Double
+
+        if sourceFormat.streamDescription.pointee.mFormatID == kAudioFormatLinearPCM {
+            // Uncompressed source (e.g. WAV/AIFF): these "packets" are raw PCM
+            // frames and must go in an AVAudioPCMBuffer. Wrapping linear PCM in an
+            // AVAudioCompressedBuffer fails an internal assertion, leaving a broken
+            // buffer that decodes to garbage — audible as crackle on those tracks.
+            let bytesPerFrame = Int(sourceFormat.streamDescription.pointee.mBytesPerFrame)
+            guard bytesPerFrame > 0 else { return }
+            let frames = AVAudioFrameCount(Int(numberBytes) / bytesPerFrame)
+            guard frames > 0,
+                  let pcmIn = AVAudioPCMBuffer(pcmFormat: sourceFormat, frameCapacity: frames)
+            else { return }
+            pcmIn.frameLength = frames
+            memcpy(pcmIn.mutableAudioBufferList.pointee.mBuffers.mData, inputData, Int(numberBytes))
+            inputBuffer = pcmIn
+            estFrames = Double(frames)
         } else {
-            maxPacketSize = max(Int(numberBytes) / Int(numberPackets), 1)
+            // Compressed source: wrap this batch of packets in a compressed buffer.
+            let maxPacketSize: Int
+            if let pds = packetDescriptions {
+                var m = 0
+                for i in 0..<Int(numberPackets) { m = max(m, Int(pds[i].mDataByteSize)) }
+                maxPacketSize = max(m, 1)
+            } else {
+                maxPacketSize = max(Int(numberBytes) / Int(numberPackets), 1)
+            }
+
+            let compressed = AVAudioCompressedBuffer(format: sourceFormat,
+                                                     packetCapacity: AVAudioPacketCount(numberPackets),
+                                                     maximumPacketSize: maxPacketSize)
+            compressed.byteLength = numberBytes
+            compressed.packetCount = AVAudioPacketCount(numberPackets)
+            memcpy(compressed.data, inputData, Int(numberBytes))
+            if let pds = packetDescriptions, let dest = compressed.packetDescriptions {
+                for i in 0..<Int(numberPackets) { dest[i] = pds[i] }
+            }
+
+            // Estimate output capacity from frames-per-packet (fallback for VBR).
+            let framesPerPacket = sourceFormat.streamDescription.pointee.mFramesPerPacket
+            estFrames = framesPerPacket > 0
+                ? Double(numberPackets) * Double(framesPerPacket)
+                : Double(numberPackets) * 1024
+            inputBuffer = compressed
         }
 
-        let compressed = AVAudioCompressedBuffer(format: sourceFormat,
-                                                 packetCapacity: AVAudioPacketCount(numberPackets),
-                                                 maximumPacketSize: maxPacketSize)
-        compressed.byteLength = numberBytes
-        compressed.packetCount = AVAudioPacketCount(numberPackets)
-        memcpy(compressed.data, inputData, Int(numberBytes))
-        if let pds = packetDescriptions, let dest = compressed.packetDescriptions {
-            for i in 0..<Int(numberPackets) { dest[i] = pds[i] }
-        }
-
-        // Estimate the output capacity from frames-per-packet (fallback for VBR).
-        let framesPerPacket = sourceFormat.streamDescription.pointee.mFramesPerPacket
-        let estFrames = framesPerPacket > 0
-            ? Double(numberPackets) * Double(framesPerPacket)
-            : Double(numberPackets) * 1024
         let ratio = outputFormat.sampleRate / sourceFormat.sampleRate
         let capacity = AVAudioFrameCount(estFrames * ratio) + 16_384
         guard let pcm = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: capacity) else { return }
@@ -123,11 +217,14 @@ final class ProgressiveAudioSource: AudioStreamSource {
             }
             provided = true
             outStatus.pointee = .haveData
-            return compressed
+            return inputBuffer
         }
 
+        decodedFrames += AVAudioFramePosition(pcm.frameLength)
+        inputFrames += AVAudioFramePosition(estFrames)
+        if let error { Self.log.error("convert error: \(error.localizedDescription)") }
         if (status == .haveData || status == .inputRanDry) && pcm.frameLength > 0 {
-            continuation.yield(SendablePCMBuffer(buffer: pcm))
+            emitConsolidated(pcm)
         }
     }
 }

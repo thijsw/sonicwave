@@ -6,5 +6,7 @@ xcuserdata/
 *.xcuserstate
 DerivedData/
 
-# Scratch screenshots
+# Scratch screenshots / logs
 Screenshot*.png
+*.log
+log.txt
