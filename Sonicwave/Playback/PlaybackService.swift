@@ -171,6 +171,8 @@ actor PlaybackService {
         do {
             for try await chunk in loader.stream(from: url) {
                 if gen != generation || Task.isCancelled { break }
+                await throttleReadAhead(loader: loader, gen: gen)
+                if gen != generation || Task.isCancelled { break }
                 source.parse(chunk)
             }
         } catch {
@@ -181,6 +183,33 @@ actor PlaybackService {
         source.finish()
         _ = await consume.value
         await decodeComplete(spanArrayIndex: spanArrayIndex, index: index, gen: gen)
+    }
+
+    // MARK: - Bounded read-ahead
+
+    /// Cap how far decoding/scheduling runs ahead of the playhead. Both are well
+    /// above the pre-roll so playback starts and never starves, but small enough
+    /// to avoid scheduling a whole track in one burst (which starved the audio IO
+    /// thread → a dropped cycle → a click) and to bound memory.
+    private var maxReadAheadFrames: AVAudioFramePosition { AVAudioFramePosition(canonicalFormat.sampleRate * 15) }
+    private var minReadAheadFrames: AVAudioFramePosition { AVAudioFramePosition(canonicalFormat.sampleRate * 8) }
+
+    /// Frames scheduled but not yet played (the buffered look-ahead).
+    private func readAheadFrames() -> AVAudioFramePosition {
+        cumulativeFrames - (currentSampleTime() ?? 0)
+    }
+
+    /// Back-pressure: once we're `maxReadAheadFrames` ahead, pause the network
+    /// transfer and decoding until playback drains the buffer to
+    /// `minReadAheadFrames`, then resume. Awaiting frees the actor so scheduling,
+    /// buffer completions, and position ticks keep running.
+    private func throttleReadAhead(loader: DataStreamLoader, gen: Int) async {
+        guard readAheadFrames() >= maxReadAheadFrames else { return }
+        loader.pause()
+        while gen == generation, !Task.isCancelled, readAheadFrames() >= minReadAheadFrames {
+            try? await Task.sleep(for: .milliseconds(80))
+        }
+        loader.resume()
     }
 
     private func schedule(_ buffer: AVAudioPCMBuffer, spanArrayIndex: Int, gen: Int) {

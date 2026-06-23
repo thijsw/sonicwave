@@ -6,6 +6,7 @@ import Foundation
 final class DataStreamLoader: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     private var continuation: AsyncThrowingStream<Data, Error>.Continuation?
     private var session: URLSession?
+    private var task: URLSessionDataTask?
 
     /// Begin streaming `url`. The returned stream finishes when the transfer
     /// completes (or throws on error). Cancelling/terminating the stream
@@ -16,6 +17,7 @@ final class DataStreamLoader: NSObject, URLSessionDataDelegate, @unchecked Senda
             let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
             self.session = session
             let task = session.dataTask(with: url)
+            self.task = task
             continuation.onTermination = { _ in
                 task.cancel()
                 session.finishTasksAndInvalidate()
@@ -23,6 +25,11 @@ final class DataStreamLoader: NSObject, URLSessionDataDelegate, @unchecked Senda
             task.resume()
         }
     }
+
+    /// Pause/resume the transfer for read-ahead back-pressure. Suspending the
+    /// task applies TCP back-pressure so the server stops sending.
+    func pause() { task?.suspend() }
+    func resume() { task?.resume() }
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask,
                     didReceive response: URLResponse,

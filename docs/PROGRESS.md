@@ -342,6 +342,16 @@ skipped unless `SONICWAVE_HOST/USER/PASS` env vars are set — no secrets commit
   many small per-batch decoder outputs into ~1-second buffers before yielding,
   cutting `scheduleBuffer` calls ~12×. Verified: the overload no longer appears
   in the log when playing the AIFF.
+- **Bounded read-ahead (paced scheduling).** Following the standard streaming
+  model (cf. AudioStreaming / SwiftAudioPlayer / the AVAudioEngine streaming
+  writeup), decoding/scheduling no longer runs unbounded ahead of playback.
+  `PlaybackService.throttleReadAhead` keeps the buffered look-ahead between ~8 s
+  and ~15 s (both well above the 2 s pre-roll): once 15 s ahead it **suspends the
+  URLSession transfer and pauses decoding**, resuming when playback drains to
+  8 s. Bounds memory (a whole track is no longer held decoded in RAM) and smooths
+  scheduling. `DataStreamLoader` gained `pause()`/`resume()`
+  (`URLSessionDataTask.suspend/resume` → TCP back-pressure). Verified: the AIFF
+  stays at 0 overloads and decode is paced (no early burst to completion).
 
 ### Still requires a human (audio output / listening)
 - ⏳ Actual sound through an output device (engine → speaker).
