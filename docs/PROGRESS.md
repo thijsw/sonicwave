@@ -19,7 +19,9 @@ milestone first. See `10-roadmap.md` for the full milestone plan.
 M0 ✅ · M1 ✅ (auth/endpoints live-verified vs Navidrome 0.62) ·
 M2 🚧 (UI/data live-verified; SwiftData cache still pending) ·
 M3 🚧 (decode pipeline live-verified; audio *output* needs a human) ·
-M4 🚧 (gapless code-complete & decode-verified; audible seam needs a human)
+M4 🚧 (gapless code-complete & decode-verified; audible seam needs a human) ·
+M5 🚧 (playlist CRUD/reorder + favorites code-complete & builds/tests green;
+needs a live server to confirm reorder-by-replace)
 
 ## How to build / test
 ```sh
@@ -30,6 +32,111 @@ xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
 ```
 
 ---
+
+## M5 — Playlists CRUD/reorder + Favorites 🚧
+Status: **code-complete, builds clean, full test suite green (incl. new
+`PlaylistEndpointTests`); playlist edits need a live server to confirm.**
+- **Endpoint** — `createPlaylist` extended with an optional `playlistId` so it
+  can *replace* a playlist's contents (the canonical Subsonic reorder
+  mechanism, since `updatePlaylist` can only append).
+- **LibraryModel** — added playlist editing: `createPlaylist(name:songIds:)`
+  (returns the created playlist to auto-select it), `deletePlaylist`,
+  `renamePlaylist`, `addToPlaylist`, `removeFromPlaylist(indexes:)`, and
+  `reorderPlaylist(name:songIds:)` (full-replace). Each refreshes the sidebar
+  list. Favorites: batched `setStarred(_:songIds:)` (one reload for many) plus
+  `setAlbumStarred`.
+- **TrackTableView** — now the single place for track actions everywhere
+  (Songs, album/playlist/genre detail, favorites, search):
+  - **Favorites star column** with optimistic local state (taps reflect
+    immediately; server reconciles on the next `getStarred2`).
+  - Context menu: Play / Play Next / Add to Up Next · **Add to Playlist ▸**
+    (existing playlists + **New Playlist…** via a name alert) · Add/Remove
+    Favorites (multi-select aware).
+  - **Playlist-edit mode** (opt-in via handlers): reorder (Move to Top/Up/
+    Down/Bottom) + **Remove from Playlist**, operating on stored indices;
+    `sortable: false` keeps the displayed order == stored order so reorder is
+    coherent.
+- **SidebarView** — Playlists section header gains a **+** (New Playlist alert,
+  auto-selects the new playlist); per-row context menu **Rename… / Delete**
+  (with confirmation; resets selection if the open playlist is deleted).
+- **PlaylistDetailView** — rewritten: artwork + song-count/duration header,
+  **Play** + **Shuffle**, toolbar **⋯ → Rename…**, and an editable
+  `TrackTableView` (drag-free reorder + remove via context menu) with optimistic
+  updates that re-fetch after each server edit.
+- **AlbumDetailView** — header **favorite (star) toggle** for whole albums.
+- **Row identity** — `TrackTableView` wraps each track in a positional `Row`
+  (id = stored index) so **duplicate songs are distinct** (select / remove /
+  reorder act on one entry, not every copy). Title is now the first column.
+- **Drag & drop** — track-table rows are `.draggable` (`DraggedTrack` = song id
+  + source index, JSON-encoded); **dropping onto a sidebar playlist** adds the
+  song(s), with a drop-target highlight.
+- **Playlist appearance (Music-faithful, AppKit table)** — `PlaylistDetailView`
+  uses `MusicTrackTable`, an `NSViewRepresentable` wrapping `NSTableView`
+  (`UI/Components/MusicTrackTable.swift`). SwiftUI can't combine edge-to-edge
+  stripes + double-click + reliable selection (`Table` is inset-only; `List`
+  can't double-click without breaking selection), so the playlist uses AppKit:
+  - `.fullWidth` style + alternating row colors → **true edge-to-edge stripes**
+    (incl. empty filler rows below, like Music).
+  - **Double-click-to-play** (`doubleAction`), **Return-to-play** (keyDown),
+    native single/multi **selection**, full-width **red** selection via a
+    custom `NSTableRowView.drawSelection`.
+  - **Now-playing speaker** column (`speaker.wave.2.fill` in the accent red),
+    shown independently of selection.
+  - Favorite star column (clickable `NSButton`); right-click menu built with a
+    `ClosureMenuItem` helper (Play / Play Next / Add to Up Next / Add to
+    Playlist▸ / Favorite / Move to Top·Up·Down·Bottom / Remove).
+  - Verified by driving the app (computer-use): double-click started playback +
+    speaker appeared on the playing row while selection moved elsewhere; stripes
+    edge-to-edge; favorites/menu/selection all work.
+- **Unified table everywhere** — `MusicTrackTable` is now the single track list
+  used across the whole app. `TrackTableView` was reworked into a thin SwiftUI
+  wrapper over it (same public API, so all call sites — Songs, album/genre
+  detail, Favorites, Search, ColumnBrowser, Playlist — were untouched). Added to
+  the AppKit table so the browse views didn't regress:
+  - **Click-to-sort headers** (`sortDescriptorPrototype` + a coordinator-owned
+    sorted `displayed` order). Playlist mode passes `sortable: false` (keeps
+    stored order for reorder).
+  - **Drag-to-playlist** via `tableView(_:pasteboardWriterForRow:)` writing a
+    `DraggedTrack` as `public.json`, which the sidebar's SwiftUI
+    `.dropDestination(for: DraggedTrack.self)` accepts.
+  - Callbacks are order-independent: `onPlay([Song], Int)` /
+    `onToggleFavorite(Song)` / `makeMenu([Song], IndexSet)` use the *displayed*
+    (sorted) order.
+  - Verified live (computer-use): edge-to-edge stripes, double-click-to-play, the
+    now-playing speaker (which correctly tracks the song across a re-sort),
+    selection, and header sorting all work in Favorites/Songs/Playlist.
+  - The old `PlaylistTracksView` was deleted (folded into `TrackTableView`).
+  - Note: dropped the standalone album `#` (track-number) column for a single
+    consistent column set (Title/Artist/Album/Genre/Time + speaker + favorite).
+  - **Header/stripe polish:** the `Time` header is right-aligned to match its
+    right-aligned values; `columnAutoresizingStyle = .uniformColumnAutoresizing`
+    makes the flexible columns fill the table width so rows/stripes/selection
+    run truly edge-to-edge (previously ~20px short on the right). Verified.
+  - ⚠️ **Open:** post-relaunch order didn't reflect earlier menu reorders, so
+    **server-side persistence of reorder-by-replace on Navidrome is unconfirmed**
+    (favorites persist fine). Native drag-to-reorder also postponed.
+  - Other track views (Songs/Albums/Genres/Favorites/Search) still use the
+    sortable `Table` (`.inset(alternatesRowBackgrounds:)`) — inset, not
+    edge-to-edge. Converting them would mean dropping click-to-sort headers
+    (only `Table` sorts). Open question whether to unify.
+- **Accent color** — app `AccentColor` set to the iTunes red (`#CF172C` light /
+  brighter in dark), sampled from the user's iTunes 12.6.3 reference screenshot
+  (the selected-row red is `#CC132C`). Drives row selection, buttons, etc.
+- **Sidebar (iTunes-style)** — section icons are colored red (loaded via
+  `Color("AccentColor")` so they stay red regardless of list tint); selection is
+  the standard macOS pill, which renders the accent red while the sidebar is the
+  focused pane and neutral gray when another pane is focused (matching the
+  reference, which was captured with the track list focused). Forcing
+  always-gray would need custom row drawing — not done (SwiftUI's sidebar
+  selection ignores `.tint`).
+- Tests: `PlaylistEndpointTests` (8) — create (with/without songs), replace-for-
+  reorder ordering, rename/add/remove via `updatePlaylist`, delete, star/unstar.
+
+### Remaining for M5 / to verify
+- 🔬 Reorder-by-replace and add/remove against a real Navidrome (no server here).
+  Note: replace and bulk add/remove use **GET** query params, so very large
+  playlists could hit URL-length limits — fine for typical sizes; a POST path is
+  a future hardening item if needed.
 
 ## M0 — Foundation ✅
 Status: **complete, builds clean.**
@@ -162,9 +269,9 @@ Status: **UI + data flow working in-memory; SwiftData cache not yet wired.**
 - 🔬 **Playback is stubbed** — `PlayerModel` manages queue/transport state but
   no audio engine yet. Real `AVAudioEngine` streaming + gapless is M3/M4
   (`03-playback-engine.md`), the project's key spike.
-- ⏳ SwiftData cache, Now Playing center / media keys, output-device selection,
-  full playlist editing/reorder, accessibility pass, state restoration, MAS
-  packaging — all per roadmap M2–M8.
+- ⏳ SwiftData cache, output-device selection, accessibility pass, state
+  restoration, MAS packaging — all per roadmap M6–M8. (Playlist editing/reorder
+  + favorites delivered in M5; Now Playing center / media keys delivered in M3.)
 
 ## Verification status
 - ✅ `xcodebuild build` succeeds (Debug, arm64, macOS 15 target), no warnings.

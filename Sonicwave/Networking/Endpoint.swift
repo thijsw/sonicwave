@@ -83,9 +83,17 @@ struct Endpoint: Sendable {
         Endpoint("getPlaylist", [.init(name: "id", value: id)])
     }
 
-    static func createPlaylist(name: String, songIds: [String]) -> Endpoint {
-        Endpoint("createPlaylist", [.init(name: "name", value: name)]
-            + songIds.map { URLQueryItem(name: "songId", value: $0) })
+    /// Create a playlist, or — when `playlistId` is supplied — replace an
+    /// existing playlist's contents with `songIds` in the given order. The
+    /// replace form is the canonical way to **reorder** a playlist, since
+    /// `updatePlaylist` can only append (see `updatePlaylist`).
+    static func createPlaylist(name: String? = nil, playlistId: String? = nil,
+                               songIds: [String] = []) -> Endpoint {
+        var items: [URLQueryItem] = []
+        if let playlistId { items.append(.init(name: "playlistId", value: playlistId)) }
+        if let name { items.append(.init(name: "name", value: name)) }
+        items += songIds.map { URLQueryItem(name: "songId", value: $0) }
+        return Endpoint("createPlaylist", items)
     }
 
     static func deletePlaylist(id: String) -> Endpoint {

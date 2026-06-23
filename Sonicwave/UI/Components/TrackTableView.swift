@@ -1,72 +1,118 @@
 import SwiftUI
+import AppKit
 
-/// A dense, sortable track table — the core iTunes-style list used by Songs,
-/// album/playlist/genre detail, and favorites. Double-click (or ⏎) plays the
-/// row and sets the queue from the supplied list. See docs/04-ui-ux.md.
+/// The app's single track list, used everywhere (Songs, album/genre/playlist
+/// detail, favorites, search). A thin SwiftUI wrapper over the AppKit-backed
+/// `MusicTrackTable`, which provides Music-faithful behavior: edge-to-edge
+/// stripes, double-click-to-play, Return-to-play, a now-playing speaker column,
+/// click-to-sort headers, drag-to-playlist, and a favorite column. Supplying
+/// `onMovePlaylist`/`onRemoveFromPlaylist` switches it to playlist mode (no
+/// sorting; the context menu offers reorder + remove). See docs/04-ui-ux.md.
 struct TrackTableView: View {
     let tracks: [Song]
+    var onRemoveFromPlaylist: ((IndexSet) -> Void)? = nil
+    var onMovePlaylist: ((IndexSet, Int) -> Void)? = nil
+
+    @Environment(LibraryModel.self) private var library
     @Environment(PlayerModel.self) private var player
 
-    @State private var sortOrder = [KeyPathComparator(\Song.title)]
-    @State private var selection = Set<Song.ID>()
+    @State private var selection = Set<Int>()
+    /// Optimistic favorite state so the star reflects taps before the reload.
+    @State private var starOverrides: [Song.ID: Bool] = [:]
+    @State private var showNewPlaylist = false
+    @State private var newPlaylistName = ""
+    @State private var pendingSongIds: [String] = []
 
-    private var sortedTracks: [Song] {
-        tracks.sorted(using: sortOrder)
-    }
+    private var isPlaylist: Bool { onMovePlaylist != nil || onRemoveFromPlaylist != nil }
 
     var body: some View {
-        Table(sortedTracks, selection: $selection, sortOrder: $sortOrder) {
-            TableColumn("#") { song in
-                Text(song.track.map(String.init) ?? "")
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
+        MusicTrackTable(
+            tracks: tracks,
+            sortable: !isPlaylist,
+            nowPlayingID: player.currentTrack?.id,
+            selection: $selection,
+            isFavorite: { isStarred($0) },
+            onPlay: { displayed, index in player.play(tracks: displayed, startAt: index) },
+            onToggleFavorite: { song in toggleStar([song.id], star: !isStarred(song)) },
+            makeMenu: { displayed, indices in buildMenu(displayed, indices) }
+        )
+        .alert("New Playlist", isPresented: $showNewPlaylist) {
+            TextField("Name", text: $newPlaylistName)
+            Button("Create") {
+                let name = newPlaylistName.trimmingCharacters(in: .whitespacesAndNewlines)
+                let ids = pendingSongIds
+                guard !name.isEmpty else { return }
+                Task { await library.createPlaylist(name: name, songIds: ids) }
+                newPlaylistName = ""
             }
-            .width(36)
-
-            TableColumn("Title", value: \.title) { song in
-                Text(song.title).lineLimit(1)
-            }
-
-            TableColumn("Artist", value: \.artistSort) { song in
-                Text(song.artist ?? "—").lineLimit(1).foregroundStyle(.secondary)
-            }
-
-            TableColumn("Album", value: \.albumSort) { song in
-                Text(song.album ?? "—").lineLimit(1).foregroundStyle(.secondary)
-            }
-
-            TableColumn("Genre", value: \.genreSort) { song in
-                Text(song.displayGenre ?? "—").lineLimit(1).foregroundStyle(.secondary)
-            }
-
-            TableColumn("Time", value: \.durationSort) { song in
-                Text(formatTime(song.duration))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-            }
-            .width(56)
-        }
-        .contextMenu(forSelectionType: Song.ID.self) { ids in
-            Button("Play") { playSelection(ids) }
-            Button("Play Next") { player.playNext(songs(for: ids)) }
-            Button("Add to Up Next") { player.enqueue(songs(for: ids)) }
-        } primaryAction: { ids in
-            playSelection(ids)
+            Button("Cancel", role: .cancel) { newPlaylistName = "" }
+        } message: {
+            Text("Enter a name for the new playlist.")
         }
     }
 
-    private func songs(for ids: Set<Song.ID>) -> [Song] {
-        sortedTracks.filter { ids.contains($0.id) }
+    private func buildMenu(_ displayed: [Song], _ indices: IndexSet) -> NSMenu {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        let chosen = indices.sorted().compactMap { displayed.indices.contains($0) ? displayed[$0] : nil }
+        guard !chosen.isEmpty else { return menu }
+
+        menu.addItem(ClosureMenuItem(title: "Play") {
+            player.play(tracks: displayed, startAt: indices.min() ?? 0)
+        })
+        menu.addItem(ClosureMenuItem(title: "Play Next") { player.playNext(chosen) })
+        menu.addItem(ClosureMenuItem(title: "Add to Up Next") { player.enqueue(chosen) })
+        menu.addItem(.separator())
+
+        let addSub = NSMenu()
+        addSub.autoenablesItems = false
+        addSub.addItem(ClosureMenuItem(title: "New Playlist…") {
+            pendingSongIds = chosen.map(\.id)
+            newPlaylistName = ""
+            showNewPlaylist = true
+        })
+        if !library.playlists.isEmpty {
+            addSub.addItem(.separator())
+            for pl in library.playlists {
+                addSub.addItem(ClosureMenuItem(title: pl.name) {
+                    let ids = chosen.map(\.id)
+                    Task { await library.addToPlaylist(id: pl.id, songIds: ids) }
+                })
+            }
+        }
+        let addItem = NSMenuItem(title: "Add to Playlist", action: nil, keyEquivalent: "")
+        addItem.submenu = addSub
+        menu.addItem(addItem)
+
+        let allStarred = chosen.allSatisfy { isStarred($0) }
+        menu.addItem(ClosureMenuItem(title: allStarred ? "Remove from Favorites" : "Add to Favorites") {
+            toggleStar(chosen.map(\.id), star: !allStarred)
+        })
+
+        if isPlaylist {
+            menu.addItem(.separator())
+            let lo = indices.min() ?? 0, hi = indices.max() ?? 0
+            if let onMovePlaylist {
+                menu.addItem(ClosureMenuItem(title: "Move to Top", enabled: lo != 0) { onMovePlaylist(indices, 0) })
+                menu.addItem(ClosureMenuItem(title: "Move Up", enabled: lo != 0) { onMovePlaylist(indices, lo - 1) })
+                menu.addItem(ClosureMenuItem(title: "Move Down", enabled: hi != tracks.count - 1) { onMovePlaylist(indices, hi + 2) })
+                menu.addItem(ClosureMenuItem(title: "Move to Bottom", enabled: hi != tracks.count - 1) { onMovePlaylist(indices, tracks.count) })
+            }
+            if let onRemoveFromPlaylist {
+                menu.addItem(.separator())
+                menu.addItem(ClosureMenuItem(title: "Remove from Playlist") { onRemoveFromPlaylist(indices) })
+            }
+        }
+        return menu
     }
 
-    private func playSelection(_ ids: Set<Song.ID>) {
-        let ordered = sortedTracks
-        guard let first = ids.first, let index = ordered.firstIndex(where: { $0.id == first }) else {
-            player.play(tracks: ordered, startAt: 0)
-            return
-        }
-        player.play(tracks: ordered, startAt: index)
+    private func isStarred(_ song: Song) -> Bool {
+        starOverrides[song.id] ?? song.isStarred
+    }
+
+    private func toggleStar(_ songIds: [String], star: Bool) {
+        for id in songIds { starOverrides[id] = star }
+        Task { await library.setStarred(star, songIds: songIds) }
     }
 }
 
@@ -79,12 +125,4 @@ func formatTime(_ seconds: Int?) -> String {
 
 func formatTime(_ seconds: TimeInterval) -> String {
     formatTime(Int(seconds.rounded()))
-}
-
-/// Sort-friendly accessors that avoid optionals in comparators.
-extension Song {
-    var artistSort: String { artist ?? "" }
-    var albumSort: String { album ?? "" }
-    var genreSort: String { displayGenre ?? "" }
-    var durationSort: Int { duration ?? 0 }
 }

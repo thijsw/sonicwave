@@ -7,6 +7,9 @@ struct AlbumDetailView: View {
     @Environment(PlayerModel.self) private var player
     @Environment(\.dismiss) private var dismiss
     @State private var tracks: [Song] = []
+    @State private var starredOverride: Bool?
+
+    private var isStarred: Bool { starredOverride ?? album.isStarred }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -17,12 +20,25 @@ struct AlbumDetailView: View {
                     Text(album.artist ?? "—").font(.title3).foregroundStyle(.secondary)
                     if let year = album.year { Text(String(year)).font(.caption).foregroundStyle(.secondary) }
                     Spacer()
-                    Button {
-                        player.play(tracks: tracks)
-                    } label: {
-                        Label("Play", systemImage: "play.fill")
+                    HStack {
+                        Button {
+                            player.play(tracks: tracks)
+                        } label: {
+                            Label("Play", systemImage: "play.fill")
+                        }
+                        .disabled(tracks.isEmpty)
+
+                        Button {
+                            let new = !isStarred
+                            starredOverride = new
+                            Task { await library.setAlbumStarred(new, albumId: album.id) }
+                        } label: {
+                            Image(systemName: isStarred ? "star.fill" : "star")
+                                .foregroundStyle(isStarred ? Color.yellow : Color.secondary)
+                        }
+                        .buttonStyle(.borderless)
+                        .help(isStarred ? "Remove from Favorites" : "Add to Favorites")
                     }
-                    .disabled(tracks.isEmpty)
                 }
                 Spacer()
             }

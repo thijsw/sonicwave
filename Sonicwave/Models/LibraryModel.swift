@@ -181,6 +181,48 @@ final class LibraryModel {
         }
     }
 
+    // MARK: - Playlist editing (M5)
+
+    /// Create a playlist, optionally seeded with songs. Returns the created
+    /// playlist (when the server echoes it) so callers can select it.
+    @discardableResult
+    func createPlaylist(name: String, songIds: [String] = []) async -> Playlist? {
+        let created = try? await client.send(.createPlaylist(name: name, songIds: songIds),
+                                             as: PlaylistBody.self)
+        await reloadPlaylists()
+        return created?.playlist
+    }
+
+    func deletePlaylist(id: String) async {
+        _ = try? await client.sendStatus(.deletePlaylist(id: id))
+        await reloadPlaylists()
+    }
+
+    func renamePlaylist(id: String, to name: String) async {
+        _ = try? await client.sendStatus(.updatePlaylist(id: id, name: name))
+        await reloadPlaylists()
+    }
+
+    func addToPlaylist(id: String, songIds: [String]) async {
+        guard !songIds.isEmpty else { return }
+        _ = try? await client.sendStatus(.updatePlaylist(id: id, songIdsToAdd: songIds))
+        await reloadPlaylists()
+    }
+
+    func removeFromPlaylist(id: String, indexes: [Int]) async {
+        guard !indexes.isEmpty else { return }
+        _ = try? await client.sendStatus(.updatePlaylist(id: id, songIndexesToRemove: indexes))
+        await reloadPlaylists()
+    }
+
+    /// Reorder by replacing the playlist's contents with `songIds` in the new
+    /// order — `updatePlaylist` can only append, so the full-replace form of
+    /// `createPlaylist` is the canonical reorder mechanism.
+    func reorderPlaylist(id: String, name: String, songIds: [String]) async {
+        _ = try? await client.sendStatus(.createPlaylist(name: name, playlistId: id, songIds: songIds))
+        await reloadPlaylists()
+    }
+
     // MARK: - Search
 
     struct SearchResults: Sendable {
@@ -211,12 +253,22 @@ final class LibraryModel {
     // MARK: - Favorite toggling
 
     func setStarred(_ starred: Bool, songId: String) async {
-        do {
-            _ = try await client.sendStatus(starred ? .star(id: songId) : .unstar(id: songId))
-            await reloadStarred()
-        } catch {
-            // ignore; UI reflects server on next reload
+        await setStarred(starred, songIds: [songId])
+    }
+
+    /// Star/unstar several songs, reloading favorites once at the end.
+    func setStarred(_ starred: Bool, songIds: [String]) async {
+        guard !songIds.isEmpty else { return }
+        for id in songIds {
+            _ = try? await client.sendStatus(starred ? .star(id: id) : .unstar(id: id))
         }
+        await reloadStarred()
+    }
+
+    func setAlbumStarred(_ starred: Bool, albumId: String) async {
+        _ = try? await client.sendStatus(
+            starred ? .star(id: albumId, isAlbum: true) : .unstar(id: albumId, isAlbum: true))
+        await reloadStarred()
     }
 
     // MARK: - Album detail

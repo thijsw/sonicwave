@@ -1,0 +1,10 @@
+# macOS
+.DS_Store
+
+# Xcode user/build state
+xcuserdata/
+*.xcuserstate
+DerivedData/
+
+# Scratch screenshots
+Screenshot*.png
