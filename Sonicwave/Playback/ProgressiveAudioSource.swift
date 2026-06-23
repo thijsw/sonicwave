@@ -23,6 +23,12 @@ final class ProgressiveAudioSource: AudioStreamSource {
     private static let log = Logger(subsystem: "nl.huell.sonicwave", category: "decode")
     private var decodedFrames: AVAudioFramePosition = 0
     private var inputFrames: AVAudioFramePosition = 0
+
+    /// Frames of decoded output to discard from the start. Used to seek on
+    /// non-transcoded streams (the server can't offset the original file), by
+    /// decoding from 0 and dropping everything before the seek point.
+    private let skipFrames: AVAudioFramePosition
+    private var producedFrames: AVAudioFramePosition = 0
     /// Consolidate the many small per-batch decoder outputs into ~1-second
     /// buffers before yielding. Scheduling thousands of tiny buffers in a burst
     /// (a whole track decodes far faster than real time) starves the audio IO
@@ -30,8 +36,9 @@ final class ProgressiveAudioSource: AudioStreamSource {
     private let chunkTarget: AVAudioFrameCount = 44_100
     private var accum: AVAudioPCMBuffer?
 
-    init(outputFormat: AVAudioFormat) {
+    init(outputFormat: AVAudioFormat, skipFrames: AVAudioFramePosition = 0) {
         self.outputFormat = outputFormat
+        self.skipFrames = skipFrames
         let (stream, continuation) = AsyncStream.makeStream(of: SendablePCMBuffer.self)
         self.buffers = stream
         self.continuation = continuation
@@ -83,11 +90,37 @@ final class ProgressiveAudioSource: AudioStreamSource {
             return nil
         }
         if (status == .haveData || status == .endOfStream || status == .inputRanDry) && pcm.frameLength > 0 {
-            emitConsolidated(pcm)
+            produce(pcm)
         }
     }
 
-    // MARK: - Buffer consolidation
+    // MARK: - Output (skip + consolidation)
+
+    /// Apply the seek skip, then consolidate. Buffers fully before the seek point
+    /// are dropped; the buffer straddling it is trimmed.
+    private func produce(_ pcm: AVAudioPCMBuffer) {
+        guard let out = applySkip(pcm) else { return }
+        emitConsolidated(out)
+    }
+
+    private func applySkip(_ pcm: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
+        guard skipFrames > 0 else { return pcm }
+        let n = AVAudioFramePosition(pcm.frameLength)
+        defer { producedFrames += n }
+        if producedFrames >= skipFrames { return pcm }            // fully past the seek
+        if producedFrames + n <= skipFrames { return nil }        // fully before the seek
+        // Straddles the seek point: keep the tail.
+        let drop = Int(skipFrames - producedFrames)
+        let keep = Int(pcm.frameLength) - drop
+        guard keep > 0, let trimmed = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: AVAudioFrameCount(keep)) else { return nil }
+        trimmed.frameLength = AVAudioFrameCount(keep)
+        if let s = pcm.floatChannelData, let d = trimmed.floatChannelData {
+            for ch in 0..<Int(outputFormat.channelCount) {
+                memcpy(d[ch], s[ch] + drop, keep * MemoryLayout<Float>.size)
+            }
+        }
+        return trimmed
+    }
 
     /// Append small outputs into `accum`, yielding ~1s buffers. Buffers already at
     /// least the target size pass straight through.
@@ -224,7 +257,7 @@ final class ProgressiveAudioSource: AudioStreamSource {
         inputFrames += AVAudioFramePosition(estFrames)
         if let error { Self.log.error("convert error: \(error.localizedDescription)") }
         if (status == .haveData || status == .inputRanDry) && pcm.frameLength > 0 {
-            emitConsolidated(pcm)
+            produce(pcm)
         }
     }
 }

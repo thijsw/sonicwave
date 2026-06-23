@@ -81,7 +81,7 @@ actor PlaybackService {
         emit(.stateChanged(.buffering))
         if time > 0 { emit(.position(time: time, duration: duration)) }
         startDecode(songId: songId, suffix: suffix, duration: duration, index: index,
-                    seekBase: time, timeOffset: time > 0 ? Int(time) : nil, gen: gen)
+                    seekBase: time, gen: gen)
     }
 
     /// Provide the next track to pre-buffer (reply to `.wantNext`).
@@ -89,7 +89,7 @@ actor PlaybackService {
         guard awaitingNext else { return }
         awaitingNext = false
         startDecode(songId: songId, suffix: suffix, duration: duration, index: index,
-                    seekBase: 0, timeOffset: nil, gen: generation)
+                    seekBase: 0, gen: generation)
     }
 
     /// No successor — the current track is the last one.
@@ -132,7 +132,7 @@ actor PlaybackService {
     // MARK: - Decode pipeline
 
     private func startDecode(songId: String, suffix: String?, duration: TimeInterval,
-                             index: Int, seekBase: TimeInterval, timeOffset: Int?, gen: Int) {
+                             index: Int, seekBase: TimeInterval, gen: Int) {
         // Begin a new span starting at the current end of the scheduled timeline.
         let span = TrackSpan(id: songId, index: index, duration: duration, seekBase: seekBase,
                              startFrame: cumulativeFrames, frameCount: 0, decodeComplete: false)
@@ -141,23 +141,31 @@ actor PlaybackService {
 
         decodeTask = Task { [weak self] in
             await self?.runDecode(songId: songId, suffix: suffix, index: index,
-                                  timeOffset: timeOffset, spanArrayIndex: spanArrayIndex, gen: gen)
+                                  seekBase: seekBase, spanArrayIndex: spanArrayIndex, gen: gen)
         }
     }
 
     private func runDecode(songId: String, suffix: String?, index: Int,
-                           timeOffset: Int?, spanArrayIndex: Int, gen: Int) async {
+                           seekBase: TimeInterval, spanArrayIndex: Int, gen: Int) async {
         let prefs = TranscodePrefs.current()
+        // Server-side `timeOffset` only seeks *transcoded* streams; for original
+        // files the server ignores it (plays from the start), so we instead decode
+        // from 0 and discard output up to the seek point.
+        let transcoding = prefs.format != nil
+        let serverOffset = (transcoding && seekBase > 0) ? Int(seekBase) : nil
+        let skipFrames = (!transcoding && seekBase > 0)
+            ? AVAudioFramePosition(seekBase * canonicalFormat.sampleRate) : 0
+
         let url: URL
         do {
             url = try await client.streamURL(songId: songId, format: prefs.format,
-                                             maxBitRate: prefs.maxBitRate, timeOffset: timeOffset)
+                                             maxBitRate: prefs.maxBitRate, timeOffset: serverOffset)
         } catch {
             if gen == generation { emit(.failed((error as? SubsonicError)?.userMessage ?? error.localizedDescription)) }
             return
         }
 
-        let source = ProgressiveAudioSource(outputFormat: canonicalFormat)
+        let source = ProgressiveAudioSource(outputFormat: canonicalFormat, skipFrames: skipFrames)
         source.open(fileTypeHint: audioFileTypeHint(forSuffix: suffix))
         let decoded = source.buffers
 

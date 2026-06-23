@@ -352,6 +352,17 @@ skipped unless `SONICWAVE_HOST/USER/PASS` env vars are set — no secrets commit
   scheduling. `DataStreamLoader` gained `pause()`/`resume()`
   (`URLSessionDataTask.suspend/resume` → TCP back-pressure). Verified: the AIFF
   stays at 0 overloads and decode is paced (no early burst to completion).
+- 🐛→✅ **Seek restarted the track from 0.** The Subsonic `timeOffset` parameter
+  only seeks *transcoded* streams (the OpenSubsonic `transcodeOffset` extension);
+  on an original-file stream (the default, transcoding off) the server ignores it
+  and plays from the start. **Fix:** when not transcoding, `runDecode` streams from
+  0 and `ProgressiveAudioSource` **discards decoded output up to the seek point**
+  (`skipFrames`, sample-precise, works for every format); when transcoding it
+  still uses the efficient server-side `timeOffset`. Verified by driving the app:
+  scrubbing to ~2:00 resumes playback from 2:00 (0 overloads). Note: the
+  non-transcoded path re-reads from the start up to the seek point (fine on a fast
+  connection; a future byte-range/`AudioFileStreamSeek` optimization could avoid
+  the re-read for self-syncing formats).
 
 ### Still requires a human (audio output / listening)
 - ⏳ Actual sound through an output device (engine → speaker).
