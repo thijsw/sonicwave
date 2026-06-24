@@ -13,7 +13,10 @@ final class ArtworkCache {
     private var inFlight: [String: Task<NSImage?, Never>] = [:]
 
     /// Set by AppModel so the cache can build authenticated cover-art URLs.
-    weak var clientBox: ClientBox?
+    /// Held strongly: the cache is a process-lifetime singleton and `ClientBox`
+    /// only retains the `SubsonicClient` (no cycle). A `weak` ref here would let
+    /// the inline `ClientBox(client)` deallocate immediately → no artwork.
+    var clientBox: ClientBox?
 
     init() {
         cache.countLimit = 400
