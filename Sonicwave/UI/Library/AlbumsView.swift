@@ -43,6 +43,8 @@ struct AlbumsView: View {
                         Text("Title").tag("alphabeticalByName")
                         Text("Artist").tag("alphabeticalByArtist")
                     }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
                 } label: {
                     Label("Sort", systemImage: "arrow.up.arrow.down")
                 }
