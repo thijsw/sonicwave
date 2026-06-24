@@ -18,6 +18,7 @@ struct SonicwaveApp: App {
                 .environment(app.connection)
                 .frame(minWidth: 900, minHeight: 560)
         }
+        .defaultSize(width: 1180, height: 760)
         .commands { SonicwaveCommands(app: app) }
 
         Settings {

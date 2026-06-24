@@ -26,6 +26,19 @@ private final class TrackRowView: NSTableRowView {
     }
 }
 
+/// Cell for the dimmed secondary columns: `secondaryLabelColor` normally, white
+/// on the selected (emphasized) row so it stays legible on the red highlight —
+/// matching how the managed title cell behaves.
+private final class SecondaryTextCell: NSTableCellView {
+    override var backgroundStyle: NSView.BackgroundStyle {
+        didSet {
+            textField?.textColor = backgroundStyle == .emphasized
+                ? .alternateSelectedControlTextColor
+                : .secondaryLabelColor
+        }
+    }
+}
+
 /// NSTableView subclass that surfaces a per-row context menu and Return-to-play.
 private final class InnerTableView: NSTableView {
     var contextMenuProvider: ((IndexSet) -> NSMenu?)?
@@ -287,15 +300,14 @@ struct MusicTrackTable: NSViewRepresentable {
                 case "time": text = formatTime(song.duration)
                 default: text = ""
                 }
-                let cell = NSTableCellView()
                 let tf = NSTextField(labelWithString: text)
                 tf.lineBreakMode = .byTruncatingTail
                 tf.translatesAutoresizingMaskIntoConstraints = false
-                if id == "title" {
-                    cell.textField = tf // managed → turns white when the row is selected
-                } else {
-                    tf.textColor = .secondaryLabelColor
-                }
+                // Title is the primary label; other columns are dimmed. Assigning
+                // `cell.textField` lets both turn white on the selected row.
+                let cell: NSTableCellView = (id == "title") ? NSTableCellView() : SecondaryTextCell()
+                if id != "title" { tf.textColor = .secondaryLabelColor }
+                cell.textField = tf
                 if id == "time" {
                     tf.alignment = .right
                     tf.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
