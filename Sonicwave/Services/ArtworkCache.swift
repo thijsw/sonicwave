@@ -11,6 +11,10 @@ final class ArtworkCache {
 
     private let cache = NSCache<NSString, NSImage>()
     private var inFlight: [String: Task<NSImage?, Never>] = [:]
+    /// Pixel sizes cached per coverArt id, so we can surface an already-loaded
+    /// variant instantly while the exact size is fetched (probed against the
+    /// cache, so eviction is respected).
+    private var sizesByID: [String: [Int]] = [:]
 
     /// Set by AppModel so the cache can build authenticated cover-art URLs.
     /// Held strongly: the cache is a process-lifetime singleton and `ClientBox`
@@ -31,12 +35,28 @@ final class ArtworkCache {
         let task = Task<NSImage?, Never> { [weak self] in
             guard let self else { return nil }
             let image = await Self.fetch(id: id, size: size, client: clientBox.client)
-            if let image { self.cache.setObject(image, forKey: key as NSString) }
+            if let image {
+                self.cache.setObject(image, forKey: key as NSString)
+                if !(self.sizesByID[id]?.contains(size) ?? false) {
+                    self.sizesByID[id, default: []].append(size)
+                }
+            }
             self.inFlight[key] = nil
             return image
         }
         inFlight[key] = task
         return await task.value
+    }
+
+    /// Any already-cached image for `id` (largest available), used as an instant
+    /// placeholder while the exact size loads — so showing the same art at a
+    /// different size doesn't flash the empty placeholder.
+    func cachedVariant(coverArt id: String?) -> NSImage? {
+        guard let id, let sizes = sizesByID[id] else { return nil }
+        for size in sizes.sorted(by: >) {
+            if let image = cache.object(forKey: "\(id)@\(size)" as NSString) { return image }
+        }
+        return nil
     }
 
     func purge() {

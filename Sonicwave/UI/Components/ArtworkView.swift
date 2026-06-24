@@ -10,6 +10,15 @@ struct ArtworkView: View {
 
     @State private var image: NSImage?
 
+    init(coverArt: String?, size: CGFloat, cornerRadius: CGFloat = 6) {
+        self.coverArt = coverArt
+        self.size = size
+        self.cornerRadius = cornerRadius
+        // Seed from any already-cached variant so cached art shows immediately
+        // (no placeholder flash when the same art is shown at a different size).
+        _image = State(initialValue: ArtworkCache.shared.cachedVariant(coverArt: coverArt))
+    }
+
     var body: some View {
         ZStack {
             if let image {
@@ -29,8 +38,13 @@ struct ArtworkView: View {
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
         .task(id: coverArt) {
+            // Show a cached variant for this id at once, then upgrade to the
+            // exact size (keep the variant if the exact fetch fails).
+            image = ArtworkCache.shared.cachedVariant(coverArt: coverArt)
             let pixels = Int(size * 2)
-            image = await ArtworkCache.shared.image(coverArt: coverArt, size: pixels)
+            if let exact = await ArtworkCache.shared.image(coverArt: coverArt, size: pixels) {
+                image = exact
+            }
         }
     }
 }
