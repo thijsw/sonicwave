@@ -106,6 +106,8 @@ final class ConnectionModel {
             let info = try await client.testConnection(candidate)
             try credentials.save(candidate)
             persistTranscodePrefs()
+            // Re-scope the artwork cache to the (possibly new) server.
+            ArtworkCache.shared.setServer(baseURL: candidate.baseURL)
             state = .connected(info)
         } catch let error as SubsonicError {
             state = .failed(error.userMessage)
@@ -130,6 +132,7 @@ final class ConnectionModel {
 
     func disconnect() {
         try? credentials.clear()
+        ArtworkCache.shared.setServer(baseURL: nil)
         state = .unconfigured
     }
 

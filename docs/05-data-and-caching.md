@@ -23,6 +23,12 @@ size`:
   Because cover art is immutable, a disk hit is authoritative and kept
   indefinitely — artwork loads instantly across launches and survives network
   blips. Disk + network I/O run off the main actor.
+- **Scoped per server.** Both tiers are namespaced by a hash of the server's
+  base URL (disk: a per-server subdirectory; memory: a key prefix). A different
+  Navidrome server can reuse the same coverArt id for a different album, so
+  without scoping the cache would serve the wrong image. Set via
+  `setServer(baseURL:)` at launch, on connect, and on disconnect; switching
+  servers drops the in-memory tier and each server keeps its own disk store.
 
 ## Persistence: SwiftData 🔶 (dropped — historical)
 

@@ -36,7 +36,9 @@ final class AppModel {
         self.library = LibraryModel(client: client)
         self.player = PlayerModel(playback: playback, nowPlaying: nowPlaying)
 
-        // Give the shared artwork cache access to the authenticated client.
+        // Give the shared artwork cache access to the authenticated client, and
+        // scope it to the current server so artwork never mixes across servers.
         ArtworkCache.shared.clientBox = ClientBox(client)
+        ArtworkCache.shared.setServer(baseURL: credentials.load()?.baseURL)
     }
 }
