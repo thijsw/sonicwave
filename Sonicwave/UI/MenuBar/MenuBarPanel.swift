@@ -29,13 +29,17 @@ struct MenuBarPanel: View {
                 }
             })
             .disabled(player.currentTrack == nil)
+            .accessibilityLabel("Playback position")
 
             HStack(spacing: 28) {
                 Button { player.previous() } label: { Image(systemName: "backward.fill") }
+                    .accessibilityLabel("Previous")
                 Button { player.togglePlayPause() } label: {
                     Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.title)
                 }
+                .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
                 Button { player.next() } label: { Image(systemName: "forward.fill") }
+                    .accessibilityLabel("Next")
             }
             .buttonStyle(.borderless)
             .disabled(player.currentTrack == nil)

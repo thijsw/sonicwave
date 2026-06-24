@@ -31,8 +31,10 @@ struct NowPlayingBar: View {
 
                 HStack(spacing: 6) {
                     Image(systemName: "speaker.fill").foregroundStyle(.secondary).font(.caption)
+                        .accessibilityHidden(true)
                     Slider(value: $player.volume, in: 0...1)
                         .frame(width: 90)
+                        .accessibilityLabel("Volume")
                 }
             }
             .padding(.horizontal, 14)
@@ -44,11 +46,14 @@ struct NowPlayingBar: View {
     private var transport: some View {
         HStack(spacing: 18) {
             Button { player.previous() } label: { Image(systemName: "backward.fill") }
+                .accessibilityLabel("Previous")
             Button { player.togglePlayPause() } label: {
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                     .font(.title3)
             }
+            .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
             Button { player.next() } label: { Image(systemName: "forward.fill") }
+                .accessibilityLabel("Next")
         }
         .buttonStyle(.borderless)
         .disabled(player.currentTrack == nil)
@@ -68,6 +73,7 @@ struct NowPlayingBar: View {
                 }
             })
             .frame(minWidth: 160)
+            .accessibilityLabel("Playback position")
             Text(formatTime(player.duration)).font(.caption2).monospacedDigit()
                 .foregroundStyle(.secondary).frame(width: 38, alignment: .leading)
         }

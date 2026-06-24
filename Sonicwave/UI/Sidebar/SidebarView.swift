@@ -48,6 +48,7 @@ struct SidebarView: View {
                     }
                     .buttonStyle(.plain)
                     .help("New Playlist")
+                    .accessibilityLabel("New Playlist")
                 }
             }
         }

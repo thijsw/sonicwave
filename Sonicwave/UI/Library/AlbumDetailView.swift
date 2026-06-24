@@ -58,6 +58,7 @@ struct AlbumDetailView: View {
                     }
                     .buttonStyle(.borderless)
                     .help(isStarred ? "Remove from Favorites" : "Add to Favorites")
+                    .accessibilityLabel(isStarred ? "Remove from Favorites" : "Add to Favorites")
                 }
                 .padding(.top, 4)
             }
