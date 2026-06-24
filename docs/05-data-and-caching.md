@@ -1,17 +1,36 @@
 # 05 — Local Metadata & Artwork Caching
 
-Caching here is **metadata + artwork only** — there is **no audio/offline
-caching** (streaming-only). The goals are: instant re-entry into library views,
-smooth scrolling of large libraries, and a small memory footprint.
+> **Decision (updated):** The **SwiftData metadata cache was dropped.** The app
+> is network-required by design — you can't stream music with the server down,
+> so caching library *metadata* for offline browsing adds complexity for little
+> value. Library metadata stays **in-memory** in `LibraryModel`, fetched per
+> session. The one thing we *do* cache aggressively is **artwork** (immutable),
+> on disk — see "Artwork cache". The SwiftData section below is retained as
+> historical context and is **not implemented**.
 
-## Persistence: SwiftData 🔶
+Caching here is **artwork only** — there is **no audio/offline caching** and no
+metadata persistence (streaming-only, network-required).
 
-Use **SwiftData** (not Core Data) for the metadata cache:
+## Artwork cache (implemented)
+
+`Services/ArtworkCache.swift` is a two-tier cache keyed by `coverArt id + pixel
+size`:
+- **In-memory** `NSCache` (count-bounded) for the hot path, plus a per-id size
+  index so a different-size request can show an already-loaded variant instantly
+  (no placeholder flash).
+- **On-disk** store under `Caches/<bundleId>/Artwork`, filenames are the SHA-256
+  of the key; the original downloaded bytes (webp/jpeg) are written as-is.
+  Because cover art is immutable, a disk hit is authoritative and kept
+  indefinitely — artwork loads instantly across launches and survives network
+  blips. Disk + network I/O run off the main actor.
+
+## Persistence: SwiftData 🔶 (dropped — historical)
+
+*(Not implemented. Kept for context.)* Originally we planned **SwiftData** for a
+metadata cache:
 - Modern, value-/macro-based, pairs cleanly with `@Observable` and SwiftUI.
-- macOS 15 deployment supports it; schema is small and read-mostly.
-- If a hard limitation surfaces (e.g. complex migration or performance on very
-  large libraries), Core Data remains the escape hatch — recorded here as the
-  fallback.
+- macOS 15 deployment supported it; schema small and read-mostly.
+- Core Data was the escape hatch if a hard limitation surfaced.
 
 ### Model schema (cached server metadata)
 

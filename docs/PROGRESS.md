@@ -17,7 +17,8 @@ milestone first. See `10-roadmap.md` for the full milestone plan.
 
 ## Milestone status
 M0 ✅ · M1 ✅ (auth/endpoints live-verified vs Navidrome 0.62) ·
-M2 🚧 (UI/data live-verified; SwiftData cache still pending) ·
+M2 ✅ (UI/data live-verified; SwiftData cache dropped — network-required by
+design; artwork cached on disk) ·
 M3 🚧 (decode pipeline live-verified; audio *output* needs a human) ·
 M4 🚧 (gapless code-complete & decode-verified; audible seam needs a human) ·
 M5 🚧 (playlist CRUD/reorder + favorites code-complete & builds/tests green;
@@ -289,10 +290,11 @@ Status: **UI + data flow working in-memory; SwiftData cache not yet wired.**
 - `UI/NowPlaying/NowPlayingBar.swift`, `UI/MenuBar/MenuBarPanel.swift`,
   `App/SonicwaveCommands.swift` (Controls menu + shortcuts).
 
-### Remaining for M2
-- 🚧 SwiftData persistence layer (`Persistence/`) — currently library data is
-  held in memory per `LibraryModel`; the on-disk cache + offset persistence from
-  `05-data-and-caching.md` is not yet implemented.
+### M2 notes
+- ❌ SwiftData persistence layer — **dropped.** The app is network-required by
+  design (no offline playback), so library metadata stays in-memory per
+  `LibraryModel`. Artwork is cached persistently on disk instead
+  (`Services/ArtworkCache.swift`); see `05-data-and-caching.md`.
 - ✅ Column browser (Genre → Artist → Album) — delivered in M4.
 
 ## Known limitations / deferrals
@@ -302,9 +304,9 @@ Status: **UI + data flow working in-memory; SwiftData cache not yet wired.**
 - 🔬 **Playback is stubbed** — `PlayerModel` manages queue/transport state but
   no audio engine yet. Real `AVAudioEngine` streaming + gapless is M3/M4
   (`03-playback-engine.md`), the project's key spike.
-- ⏳ SwiftData cache, output-device selection, accessibility pass, state
-  restoration, MAS packaging — all per roadmap M6–M8. (Playlist editing/reorder
-  + favorites delivered in M5; Now Playing center / media keys delivered in M3.)
+- ⏳ Accessibility pass, state restoration, MAS packaging — per roadmap M7–M8.
+  (SwiftData cache dropped; output-device selection delivered in M6; playlist
+  editing/reorder + favorites in M5; Now Playing center / media keys in M3.)
 
 ## Verification status
 - ✅ `xcodebuild build` succeeds (Debug, arm64, macOS 15 target), no warnings.
