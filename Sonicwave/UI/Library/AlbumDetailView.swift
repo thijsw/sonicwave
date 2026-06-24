@@ -10,7 +10,11 @@ struct AlbumDetailView: View {
     @State private var tracks: [Song] = []
     @State private var starredOverride: Bool?
 
-    private var isStarred: Bool { starredOverride ?? album.isStarred }
+    // Derive from the library's starred set (source of truth) so the state
+    // persists across revisits; the optimistic override gives instant feedback.
+    private var isStarred: Bool {
+        starredOverride ?? (album.isStarred || library.starredAlbums.contains { $0.id == album.id })
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -21,6 +25,7 @@ struct AlbumDetailView: View {
         .navigationTitle(album.name)
         .task(id: album.id) {
             tracks = await library.songs(forAlbum: album.id)
+            await library.loadStarredIfNeeded()
         }
     }
 
