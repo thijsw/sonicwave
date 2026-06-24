@@ -9,3 +9,29 @@ enum SidebarSelection: Hashable {
     case favorites
     case playlist(id: String)
 }
+
+/// String coding so the selection can be persisted with `@SceneStorage` for
+/// window state restoration.
+extension SidebarSelection: RawRepresentable {
+    init?(rawValue: String) {
+        switch rawValue {
+        case "albums": self = .albums
+        case "artists": self = .artists
+        case "songs": self = .songs
+        case "favorites": self = .favorites
+        default:
+            guard rawValue.hasPrefix("playlist:") else { return nil }
+            self = .playlist(id: String(rawValue.dropFirst("playlist:".count)))
+        }
+    }
+
+    var rawValue: String {
+        switch self {
+        case .albums: "albums"
+        case .artists: "artists"
+        case .songs: "songs"
+        case .favorites: "favorites"
+        case .playlist(let id): "playlist:\(id)"
+        }
+    }
+}

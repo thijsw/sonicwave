@@ -8,15 +8,23 @@ struct RootView: View {
     @Environment(ConnectionModel.self) private var connection
     @Environment(LibraryModel.self) private var library
 
-    @State private var selection: SidebarSelection? = .albums
+    // Persisted across launches so the app reopens on the last-used section.
+    // @AppStorage (not @SceneStorage) so it restores regardless of the system's
+    // window-restoration setting; the app is effectively single-window.
+    @AppStorage("sidebarSelection") private var selectionRaw = SidebarSelection.albums.rawValue
     @State private var searchText = ""
     @State private var path = NavigationPath()
     @AppStorage("showUpNext") private var showUpNext = false
     @Environment(\.openSettings) private var openSettings
 
+    private var selection: SidebarSelection? { SidebarSelection(rawValue: selectionRaw) }
+
     var body: some View {
         NavigationSplitView {
-            SidebarView(selection: $selection)
+            SidebarView(selection: Binding(
+                get: { selection },
+                set: { selectionRaw = ($0 ?? .albums).rawValue }
+            ))
         } detail: {
             NavigationStack(path: $path) {
                 detail
@@ -35,7 +43,7 @@ struct RootView: View {
             }
         }
         .searchable(text: $searchText, placement: .toolbar, prompt: "Search")
-        .onChange(of: selection) { path = NavigationPath() }
+        .onChange(of: selectionRaw) { path = NavigationPath() }
         .onChange(of: searchText.isEmpty) { path = NavigationPath() }
         .inspector(isPresented: $showUpNext) {
             UpNextView()
@@ -53,7 +61,7 @@ struct RootView: View {
         // Drive section loading here rather than from each detail view's own
         // `.task`: a view nested as the NavigationStack root doesn't reliably run
         // its `.task` on initial launch, which left the first screen blank.
-        .task(id: selection) {
+        .task(id: selectionRaw) {
             await load(selection)
         }
     }
