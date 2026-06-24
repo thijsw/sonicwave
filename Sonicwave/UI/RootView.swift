@@ -10,6 +10,7 @@ struct RootView: View {
 
     @State private var selection: SidebarSelection? = .albums
     @State private var searchText = ""
+    @State private var path = NavigationPath()
     @AppStorage("showUpNext") private var showUpNext = false
     @Environment(\.openSettings) private var openSettings
 
@@ -17,19 +18,25 @@ struct RootView: View {
         NavigationSplitView {
             SidebarView(selection: $selection)
         } detail: {
-            detail
-                .toolbar {
-                    ToolbarItem {
-                        Button {
-                            showUpNext.toggle()
-                        } label: {
-                            Label("Up Next", systemImage: "list.bullet.rectangle")
+            NavigationStack(path: $path) {
+                detail
+                    .navigationDestination(for: Album.self) { AlbumDetailView(album: $0) }
+                    .navigationDestination(for: Artist.self) { ArtistDetailView(artist: $0) }
+                    .toolbar {
+                        ToolbarItem {
+                            Button {
+                                showUpNext.toggle()
+                            } label: {
+                                Label("Up Next", systemImage: "list.bullet.rectangle")
+                            }
+                            .help("Show Up Next")
                         }
-                        .help("Show Up Next")
                     }
-                }
+            }
         }
         .searchable(text: $searchText, placement: .toolbar, prompt: "Search")
+        .onChange(of: selection) { path = NavigationPath() }
+        .onChange(of: searchText.isEmpty) { path = NavigationPath() }
         .inspector(isPresented: $showUpNext) {
             UpNextView()
                 .inspectorColumnWidth(min: 240, ideal: 300, max: 420)
@@ -42,6 +49,23 @@ struct RootView: View {
         }
         .task {
             await connection.refresh()
+        }
+        // Drive section loading here rather than from each detail view's own
+        // `.task`: a view nested as the NavigationStack root doesn't reliably run
+        // its `.task` on initial launch, which left the first screen blank.
+        .task(id: selection) {
+            await load(selection)
+        }
+    }
+
+    private func load(_ selection: SidebarSelection?) async {
+        switch selection {
+        case .albums: await library.loadAlbumsIfNeeded()
+        case .artists: await library.loadArtistsIfNeeded()
+        case .songs: await library.loadSongsIfNeeded()
+        case .genres: await library.loadGenresIfNeeded()
+        case .favorites: await library.loadStarredIfNeeded()
+        case .playlist, nil: break
         }
     }
 

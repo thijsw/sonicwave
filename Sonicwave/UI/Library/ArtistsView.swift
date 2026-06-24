@@ -1,40 +1,34 @@
 import SwiftUI
 
-/// List of artists; selecting one shows their albums.
+/// List of artists; selecting one pushes a dedicated artist view with their
+/// albums. See docs/04-ui-ux.md.
 struct ArtistsView: View {
     @Environment(LibraryModel.self) private var library
-    @State private var selected: Artist?
 
     var body: some View {
-        List(library.artists, selection: Binding(
-            get: { selected?.id },
-            set: { id in selected = library.artists.first { $0.id == id } }
-        )) { artist in
-            HStack(spacing: 10) {
-                ArtworkView(coverArt: artist.coverArt, size: 36, cornerRadius: 18)
-                Text(artist.name)
-                Spacer()
-                if let count = artist.albumCount {
-                    Text("\(count)").foregroundStyle(.secondary).monospacedDigit()
+        List(library.artists) { artist in
+            NavigationLink(value: artist) {
+                HStack(spacing: 10) {
+                    ArtworkView(coverArt: artist.coverArt, size: 36, cornerRadius: 18)
+                    Text(artist.name)
+                    Spacer()
+                    if let count = artist.albumCount {
+                        Text("\(count)").foregroundStyle(.secondary).monospacedDigit()
+                    }
                 }
             }
-            .tag(artist.id)
         }
         .navigationTitle("Artists")
         .task { await library.loadArtistsIfNeeded() }
-        .sheet(item: $selected) { artist in
-            ArtistDetailView(artist: artist)
-                .frame(minWidth: 560, minHeight: 480)
-        }
     }
 }
 
-private struct ArtistDetailView: View {
+/// An artist's albums as a grid; selecting one pushes its album view. Pushed
+/// onto the navigation stack from `ArtistsView`.
+struct ArtistDetailView: View {
     let artist: Artist
     @Environment(LibraryModel.self) private var library
-    @Environment(\.dismiss) private var dismiss
     @State private var albums: [Album] = []
-    @State private var selectedAlbum: Album?
 
     private let columns = [GridItem(.adaptive(minimum: 150, maximum: 190), spacing: 16)]
 
@@ -42,23 +36,21 @@ private struct ArtistDetailView: View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 16) {
                 ForEach(albums) { album in
-                    VStack(alignment: .leading, spacing: 6) {
-                        ArtworkView(coverArt: album.coverArt, size: 150, cornerRadius: 8)
-                        Text(album.name).font(.callout).lineLimit(1)
-                        if let year = album.year {
-                            Text(String(year)).font(.caption).foregroundStyle(.secondary)
+                    NavigationLink(value: album) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ArtworkView(coverArt: album.coverArt, size: 150, cornerRadius: 8)
+                            Text(album.name).font(.callout).lineLimit(1)
+                            if let year = album.year {
+                                Text(String(year)).font(.caption).foregroundStyle(.secondary)
+                            }
                         }
                     }
-                    .onTapGesture { selectedAlbum = album }
+                    .buttonStyle(.plain)
                 }
             }
             .padding()
         }
         .navigationTitle(artist.name)
-        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-        .task { albums = await library.albums(forArtist: artist.id) }
-        .sheet(item: $selectedAlbum) { album in
-            AlbumDetailView(album: album).frame(minWidth: 560, minHeight: 480)
-        }
+        .task(id: artist.id) { albums = await library.albums(forArtist: artist.id) }
     }
 }

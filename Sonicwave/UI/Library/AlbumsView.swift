@@ -4,7 +4,6 @@ import SwiftUI
 /// opens its track list. See docs/04-ui-ux.md.
 struct AlbumsView: View {
     @Environment(LibraryModel.self) private var library
-    @State private var selected: Album?
 
     private let columns = [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 20)]
 
@@ -12,13 +11,15 @@ struct AlbumsView: View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 20) {
                 ForEach(library.albums) { album in
-                    AlbumCell(album: album)
-                        .onTapGesture { selected = album }
-                        .task {
-                            if album.id == library.albums.last?.id {
-                                await library.loadMoreAlbums()
-                            }
+                    NavigationLink(value: album) {
+                        AlbumCell(album: album)
+                    }
+                    .buttonStyle(.plain)
+                    .task {
+                        if album.id == library.albums.last?.id {
+                            await library.loadMoreAlbums()
                         }
+                    }
                 }
             }
             .padding(20)
@@ -29,10 +30,6 @@ struct AlbumsView: View {
         }
         .navigationTitle("Albums")
         .task { await library.loadAlbumsIfNeeded() }
-        .sheet(item: $selected) { album in
-            AlbumDetailView(album: album)
-                .frame(minWidth: 560, minHeight: 480)
-        }
     }
 }
 
