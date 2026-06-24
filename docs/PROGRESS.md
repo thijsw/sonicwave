@@ -27,7 +27,8 @@ M6 🚧 (MenuBarExtra panel + search debounce verified; output-device selection
 live-verified for enumerate/select/persist/play — multi-device switching &
 route-change need device testing) ·
 M7 🚧 (media keys hardened; last-section restoration verified; accessibility
-labels on icon-only controls — VoiceOver sweep + appearance polish still open)
+labels on icon-only controls; appearance polish — selected-row contrast, default
+window size, empty-Songs fix — done. Only a deeper VoiceOver sweep deferred)
 
 ## How to build / test
 ```sh
