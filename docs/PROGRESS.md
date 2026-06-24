@@ -25,7 +25,9 @@ M5 🚧 (playlist CRUD/reorder + favorites code-complete & builds/tests green;
 needs a live server to confirm reorder-by-replace) ·
 M6 🚧 (MenuBarExtra panel + search debounce verified; output-device selection
 live-verified for enumerate/select/persist/play — multi-device switching &
-route-change need device testing)
+route-change need device testing) ·
+M7 🚧 (media keys hardened; last-section restoration verified; accessibility
+labels on icon-only controls — VoiceOver sweep + appearance polish still open)
 
 ## How to build / test
 ```sh
