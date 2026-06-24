@@ -12,17 +12,23 @@ struct ColumnBrowserView: View {
     @State private var selectedAlbum: String?
     @State private var isLoading = false
 
+    /// With no genre selected, browse the all-songs sample; otherwise the genre's
+    /// songs. (Subsonic has no "all songs" endpoint, so the base is a sample.)
+    private var baseSongs: [Song] {
+        selectedGenre == nil ? library.songs : songs
+    }
+
     private var artists: [String] {
-        uniqueSorted(songs.compactMap(\.artist))
+        uniqueSorted(baseSongs.compactMap(\.artist))
     }
 
     private var albums: [String] {
-        let scoped = selectedArtist == nil ? songs : songs.filter { $0.artist == selectedArtist }
+        let scoped = selectedArtist == nil ? baseSongs : baseSongs.filter { $0.artist == selectedArtist }
         return uniqueSorted(scoped.compactMap(\.album))
     }
 
     private var filteredTracks: [Song] {
-        songs.filter { song in
+        baseSongs.filter { song in
             (selectedArtist == nil || song.artist == selectedArtist)
                 && (selectedAlbum == nil || song.album == selectedAlbum)
         }
@@ -57,7 +63,10 @@ struct ColumnBrowserView: View {
                                columns: [.title, .artist, .album, .genre, .time])
             }
         }
-        .task { await library.loadGenresIfNeeded() }
+        .task {
+            await library.loadSongsIfNeeded()
+            await library.loadGenresIfNeeded()
+        }
         .onChange(of: selectedGenre) { _, genre in
             selectedArtist = nil
             selectedAlbum = nil
