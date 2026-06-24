@@ -6,7 +6,6 @@ enum SidebarSelection: Hashable {
     case albums
     case artists
     case songs
-    case genres
     case favorites
     case playlist(id: String)
 }

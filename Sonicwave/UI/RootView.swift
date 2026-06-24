@@ -63,7 +63,6 @@ struct RootView: View {
         case .albums: await library.loadAlbumsIfNeeded()
         case .artists: await library.loadArtistsIfNeeded()
         case .songs: await library.loadSongsIfNeeded()
-        case .genres: await library.loadGenresIfNeeded()
         case .favorites: await library.loadStarredIfNeeded()
         case .playlist, nil: break
         }
@@ -83,7 +82,6 @@ struct RootView: View {
             case .albums: AlbumsView()
             case .artists: ArtistsView()
             case .songs: SongsView()
-            case .genres: GenresView()
             case .favorites: FavoritesView()
             case let .playlist(id): PlaylistDetailView(playlistID: id)
             case nil: ContentUnavailableView("Select an item", systemImage: "music.note")

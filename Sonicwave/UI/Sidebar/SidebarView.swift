@@ -23,7 +23,6 @@ struct SidebarView: View {
                 libraryItem("Albums", "square.stack", .albums)
                 libraryItem("Artists", "music.mic", .artists)
                 libraryItem("Songs", "music.note.list", .songs)
-                libraryItem("Genres", "guitars", .genres)
                 libraryItem("Favorites", "star", .favorites)
             }
 
