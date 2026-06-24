@@ -1,5 +1,7 @@
 import Foundation
 import AVFoundation
+import CoreAudio
+import AudioToolbox
 import os
 
 /// Owns the `AVAudioEngine` graph and drives the Option A progressive decode
@@ -61,12 +63,24 @@ actor PlaybackService {
     private var positionTask: Task<Void, Never>?
     private var activity: (any NSObjectProtocol)?
 
+    /// Persisted UID of the chosen output device (nil = system default).
+    private var outputDeviceUID: String?
+
     init(client: SubsonicClient) {
         self.client = client
         let (stream, continuation) = AsyncStream.makeStream(of: PlaybackEvent.self)
         self.events = stream
         self.continuation = continuation
+        let savedUID = UserDefaults.standard.string(forKey: "outputDeviceUID")
+        self.outputDeviceUID = (savedUID?.isEmpty == false) ? savedUID : nil
         engine.attach(node)
+        // Rebuild on output route changes (default device changed, device
+        // unplugged, hardware format changed) so playback follows the new route.
+        _ = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil
+        ) { [weak self] _ in
+            Task { await self?.handleConfigChange() }
+        }
     }
 
     // MARK: - Intent
@@ -207,6 +221,37 @@ actor PlaybackService {
         cumulativeFrames - (currentSampleTime() ?? 0)
     }
 
+    // MARK: - Output device
+
+    /// Choose the output device by UID (nil = system default). Persists and
+    /// applies immediately if the engine is live.
+    func setOutputDevice(uid: String?) {
+        outputDeviceUID = (uid?.isEmpty == false) ? uid : nil
+        UserDefaults.standard.set(outputDeviceUID, forKey: "outputDeviceUID")
+        if engineConnected { applyOutputDevice() }
+    }
+
+    /// Point the engine's output unit at the selected device (or the current
+    /// system default when none is chosen / the chosen one is gone).
+    private func applyOutputDevice() {
+        guard let au = engine.outputNode.audioUnit else { return }
+        let resolved = outputDeviceUID.flatMap { AudioOutputDevices.deviceID(forUID: $0) }
+        guard var dev = resolved ?? AudioOutputDevices.defaultOutputID() else { return }
+        let status = AudioUnitSetProperty(au, kAudioOutputUnitProperty_CurrentDevice,
+                                          kAudioUnitScope_Global, 0, &dev,
+                                          UInt32(MemoryLayout<AudioDeviceID>.size))
+        if status != noErr { Self.log.error("set output device failed: \(status)") }
+    }
+
+    /// Engine I/O config changed (route change / default device / format). Keep
+    /// the chosen device, then make sure the engine is running and audio resumes.
+    private func handleConfigChange() {
+        guard engineConnected else { return }
+        applyOutputDevice()
+        if !engine.isRunning { try? engine.start() }
+        if hasStartedPlayback, !isPaused, !node.isPlaying { node.play() }
+    }
+
     /// Back-pressure: once we're `maxReadAheadFrames` ahead, pause the network
     /// transfer and decoding until playback drains the buffer to
     /// `minReadAheadFrames`, then resume. Awaiting frees the actor so scheduling,
@@ -227,6 +272,7 @@ actor PlaybackService {
             engine.connect(node, to: engine.mainMixerNode, format: canonicalFormat)
             engine.mainMixerNode.outputVolume = volume
             engineConnected = true
+            applyOutputDevice()
             engine.prepare()
             do { try engine.start() } catch {
                 emit(.failed("Audio engine failed to start: \(error.localizedDescription)"))

@@ -21,7 +21,10 @@ M2 🚧 (UI/data live-verified; SwiftData cache still pending) ·
 M3 🚧 (decode pipeline live-verified; audio *output* needs a human) ·
 M4 🚧 (gapless code-complete & decode-verified; audible seam needs a human) ·
 M5 🚧 (playlist CRUD/reorder + favorites code-complete & builds/tests green;
-needs a live server to confirm reorder-by-replace)
+needs a live server to confirm reorder-by-replace) ·
+M6 🚧 (MenuBarExtra panel + search debounce verified; output-device selection
+live-verified for enumerate/select/persist/play — multi-device switching &
+route-change need device testing)
 
 ## How to build / test
 ```sh
@@ -32,6 +35,36 @@ xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
 ```
 
 ---
+
+## M6 — MenuBarExtra, search, output device 🚧
+Status: **code-complete, builds + tests green; output-device selection
+live-verified (single device); multi-device switching/route-change need device
+testing.**
+- **MenuBarExtra `.window` panel** — `MenuBarPanel` shares the same `PlayerModel`
+  as the main window (artwork, scrubber, prev/play-pause/next). Verified live: the
+  menu-bar popover reflects and controls the current track independently of the
+  main window.
+- **Global search** — `search3` via `.searchable`, with a 250 ms debounce and
+  per-keystroke cancellation (`.task(id:)` in `SearchResultsView`). Already in
+  place from M2; confirmed it meets the M6 bar.
+- **Output-device selection** (new):
+  - `Playback/AudioOutputDevices.swift` — Core Audio enumeration of
+    output-capable devices (`AudioDevice` = id/uid/name), default-device lookup,
+    and UID→id resolution (UID is the stable, persisted identifier).
+  - `PlaybackService` — `setOutputDevice(uid:)` persists the choice and applies it
+    to the engine's output unit (`kAudioOutputUnitProperty_CurrentDevice`),
+    applied at engine connect and re-applied on every
+    `.AVAudioEngineConfigurationChange` (route change / default-device change /
+    format change) so playback follows the new route; falls back to the system
+    default when the chosen device is gone.
+  - Settings → Playback gains an **Output Device** picker (System Default +
+    devices), persisted via `@AppStorage("outputDeviceUID")`.
+  - Verified live (computer-use): picker enumerates real devices (System Default +
+    MacBook Pro Speakers), selecting an explicit device persists and plays with
+    no engine errors / 0 IO overloads.
+  - ⚠️ Switching *between* multiple devices mid-playback and physical
+    route-changes (unplug) couldn't be exercised (one output device available);
+    the config-change handler is in place but unverified on hardware.
 
 ## M5 — Playlists CRUD/reorder + Favorites 🚧
 Status: **code-complete, builds clean, full test suite green (incl. new

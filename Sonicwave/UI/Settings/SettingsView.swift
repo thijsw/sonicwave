@@ -77,10 +77,25 @@ private struct ConnectionSettingsView: View {
 
 private struct PlaybackSettingsView: View {
     @Environment(ConnectionModel.self) private var connection
+    @Environment(AppModel.self) private var app
+    @State private var devices: [AudioDevice] = []
+    @AppStorage("outputDeviceUID") private var outputDeviceUID = ""
 
     var body: some View {
         @Bindable var connection = connection
         Form {
+            Section("Output") {
+                Picker("Output Device", selection: $outputDeviceUID) {
+                    Text("System Default").tag("")
+                    ForEach(devices) { device in
+                        Text(device.name).tag(device.uid)
+                    }
+                }
+                .onChange(of: outputDeviceUID) {
+                    let uid = outputDeviceUID.isEmpty ? nil : outputDeviceUID
+                    Task { await app.playback.setOutputDevice(uid: uid) }
+                }
+            }
             Section("Streaming") {
                 Toggle("Transcode on the server", isOn: $connection.transcodeEnabled)
                     .onChange(of: connection.transcodeEnabled) { connection.persistTranscodePrefs() }
@@ -106,5 +121,6 @@ private struct PlaybackSettingsView: View {
         }
         .formStyle(.grouped)
         .padding()
+        .task { devices = AudioOutputDevices.all() }
     }
 }
