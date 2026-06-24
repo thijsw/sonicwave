@@ -34,7 +34,18 @@ final class PlayerModel {
     private(set) var lastError: String?
 
     var repeatMode: RepeatMode = .off
-    var shuffle: Bool = false
+    var shuffle: Bool = false {
+        didSet {
+            guard oldValue != shuffle else { return }
+            rebuildUpcoming()
+        }
+    }
+
+    /// Canonical (unshuffled) order, used to restore order when shuffle is off.
+    @ObservationIgnored private var unshuffledOrder: [Song] = []
+    /// Queue index the engine has already pre-buffered (kept fixed when
+    /// reordering, so its scheduled audio still matches the track we display).
+    @ObservationIgnored private var committedNextIndex: Int?
     var volume: Double = 1.0 {
         didSet { forward { await $0.setVolume(self.volume) } }
     }
@@ -64,17 +75,21 @@ final class PlayerModel {
     func play(tracks: [Song], startAt index: Int = 0) {
         guard !tracks.isEmpty, tracks.indices.contains(index) else { return }
         queue = tracks
+        unshuffledOrder = tracks
         setCurrent(index)
+        if shuffle { rebuildUpcoming() }
         state = .playing
         startCurrent()
     }
 
     func playNext(_ tracks: [Song]) {
+        unshuffledOrder.append(contentsOf: tracks)
         guard let index = currentIndex else { queue.append(contentsOf: tracks); return }
         queue.insert(contentsOf: tracks, at: index + 1)
     }
 
     func enqueue(_ tracks: [Song]) {
+        unshuffledOrder.append(contentsOf: tracks)
         queue.append(contentsOf: tracks)
     }
 
@@ -167,6 +182,15 @@ final class PlayerModel {
         forward { await $0.seek(to: target) }
     }
 
+    /// Cycle repeat: off → all → one → off.
+    func cycleRepeat() {
+        switch repeatMode {
+        case .off: repeatMode = .all
+        case .all: repeatMode = .one
+        case .one: repeatMode = .off
+        }
+    }
+
     // MARK: - Internal transitions
 
     private func setCurrent(_ index: Int) {
@@ -186,6 +210,7 @@ final class PlayerModel {
     }
 
     private func startCurrent(from time: TimeInterval = 0) {
+        committedNextIndex = nil // a hard start resets the engine's pre-buffer
         guard let track = currentTrack, let index = currentIndex else { return }
         updateNowPlayingTrack()
         let id = track.id
@@ -221,6 +246,21 @@ final class PlayerModel {
         if queue.indices.contains(next) { return next }
         if repeatMode == .all, !queue.isEmpty { return 0 }
         return nil
+    }
+
+    /// Reorder the not-yet-reached tracks for the current shuffle state, leaving
+    /// the current track and any already pre-buffered next in place (so the
+    /// engine's scheduled audio still matches what we display). Turning shuffle
+    /// off restores the original relative order of the upcoming tracks.
+    private func rebuildUpcoming() {
+        guard let current = currentIndex else { return }
+        let pivot = max(current, committedNextIndex ?? current)
+        guard pivot + 1 < queue.count else { return }
+        let upcoming = Array(queue[(pivot + 1)...])
+        let reordered = shuffle
+            ? upcoming.shuffled()
+            : upcoming.sorted { (unshuffledOrder.firstIndex(of: $0) ?? 0) < (unshuffledOrder.firstIndex(of: $1) ?? 0) }
+        queue.replaceSubrange((pivot + 1)..., with: reordered)
     }
 
     // MARK: - Event loop
@@ -260,6 +300,7 @@ final class PlayerModel {
         guard queue.indices.contains(index), index != currentIndex else { return }
         if let current = currentTrack { history.append(current) }
         currentIndex = index
+        committedNextIndex = nil // consumed; the next provideNext sets the new one
         currentTrack = queue[index]
         duration = TimeInterval(queue[index].duration ?? 0)
         position = 0
@@ -270,6 +311,7 @@ final class PlayerModel {
     private func provideNext(after index: Int) {
         guard let playback else { return }
         if let target = autoNext(after: index), queue.indices.contains(target) {
+            committedNextIndex = target
             let song = queue[target]
             let id = song.id
             let suffix = song.suffix

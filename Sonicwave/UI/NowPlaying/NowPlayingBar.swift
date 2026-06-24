@@ -44,19 +44,31 @@ struct NowPlayingBar: View {
     }
 
     private var transport: some View {
-        HStack(spacing: 18) {
-            Button { player.previous() } label: { Image(systemName: "backward.fill") }
-                .accessibilityLabel("Previous")
-            Button { player.togglePlayPause() } label: {
-                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.title3)
+        HStack(spacing: 14) {
+            Button { player.shuffle.toggle() } label: { Image(systemName: "shuffle") }
+                .accessibilityLabel("Shuffle")
+                .foregroundStyle(player.shuffle ? Color.accentColor : Color.secondary)
+
+            Group {
+                Button { player.previous() } label: { Image(systemName: "backward.fill") }
+                    .accessibilityLabel("Previous")
+                Button { player.togglePlayPause() } label: {
+                    Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.title3)
+                }
+                .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
+                Button { player.next() } label: { Image(systemName: "forward.fill") }
+                    .accessibilityLabel("Next")
             }
-            .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
-            Button { player.next() } label: { Image(systemName: "forward.fill") }
-                .accessibilityLabel("Next")
+            .disabled(player.currentTrack == nil)
+
+            Button { player.cycleRepeat() } label: {
+                Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat")
+            }
+            .accessibilityLabel("Repeat")
+            .foregroundStyle(player.repeatMode != .off ? Color.accentColor : Color.secondary)
         }
         .buttonStyle(.borderless)
-        .disabled(player.currentTrack == nil)
     }
 
     private var scrubber: some View {
