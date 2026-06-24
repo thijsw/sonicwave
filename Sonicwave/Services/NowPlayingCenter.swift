@@ -45,9 +45,20 @@ final class NowPlayingCenter {
             self?.onSeek?(event.positionTime)
             return .success
         }
-        // Commands we don't support are left disabled by default.
-        center.ratingCommand.isEnabled = false
-        center.likeCommand.isEnabled = false
+
+        // Explicitly mark which transport the keyboard media keys / Control
+        // Center drive, so the system never offers a control we don't handle.
+        for command in [center.playCommand, center.pauseCommand, center.togglePlayPauseCommand,
+                        center.nextTrackCommand, center.previousTrackCommand] {
+            command.isEnabled = true
+        }
+        center.changePlaybackPositionCommand.isEnabled = true
+        for command in [center.ratingCommand, center.likeCommand, center.dislikeCommand,
+                        center.skipForwardCommand, center.skipBackwardCommand,
+                        center.seekForwardCommand, center.seekBackwardCommand,
+                        center.changeRepeatModeCommand, center.changeShuffleModeCommand] {
+            command.isEnabled = false
+        }
     }
 
     /// Update the static metadata + transport state for the current track.
