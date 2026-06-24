@@ -40,9 +40,11 @@ struct RootView: View {
                             .help("Show Up Next")
                         }
                     }
+                    // Pinned to the detail (main) toolbar so it stays in one place,
+                    // rather than the system shuffling it between columns.
+                    .searchable(text: $searchText, placement: .toolbar, prompt: "Search")
             }
         }
-        .searchable(text: $searchText, placement: .toolbar, prompt: "Search")
         .onChange(of: selectionRaw) { path = NavigationPath() }
         .onChange(of: searchText.isEmpty) { path = NavigationPath() }
         .inspector(isPresented: $showUpNext) {
