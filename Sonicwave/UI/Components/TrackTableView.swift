@@ -10,6 +10,8 @@ import AppKit
 /// sorting; the context menu offers reorder + remove). See docs/04-ui-ux.md.
 struct TrackTableView: View {
     let tracks: [Song]
+    /// Content columns to show, in order — specified explicitly per call site.
+    let columns: [TrackColumn]
     var onRemoveFromPlaylist: ((IndexSet) -> Void)? = nil
     var onMovePlaylist: ((IndexSet, Int) -> Void)? = nil
 
@@ -29,6 +31,7 @@ struct TrackTableView: View {
         MusicTrackTable(
             tracks: tracks,
             sortable: !isPlaylist,
+            columns: columns,
             nowPlayingID: player.currentTrack?.id,
             selection: $selection,
             isFavorite: { isStarred($0) },

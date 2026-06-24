@@ -16,7 +16,7 @@ struct AlbumDetailView: View {
         VStack(spacing: 0) {
             header
             Divider()
-            TrackTableView(tracks: tracks)
+            TrackTableView(tracks: tracks, columns: [.title, .artist, .genre, .time])
         }
         .navigationTitle(album.name)
         .task(id: album.id) {

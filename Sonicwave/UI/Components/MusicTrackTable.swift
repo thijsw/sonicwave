@@ -50,6 +50,37 @@ private final class InnerTableView: NSTableView {
     }
 }
 
+/// A selectable data column in the track list. The now-playing indicator and
+/// favorite-star columns are always present (fixed-width affordances); these are
+/// the content columns each call site opts into explicitly.
+enum TrackColumn {
+    case title, artist, album, genre, time
+
+    var id: String {
+        switch self {
+        case .title: "title"; case .artist: "artist"; case .album: "album"
+        case .genre: "genre"; case .time: "time"
+        }
+    }
+    var header: String {
+        switch self {
+        case .title: "Title"; case .artist: "Artist"; case .album: "Album"
+        case .genre: "Genre"; case .time: "Time"
+        }
+    }
+    /// (default, min, max) widths.
+    var widths: (CGFloat, CGFloat, CGFloat) {
+        switch self {
+        case .title: (240, 120, 10_000)
+        case .artist: (170, 80, 10_000)
+        case .album: (170, 80, 10_000)
+        case .genre: (100, 60, 400)
+        case .time: (54, 54, 80)
+        }
+    }
+    var alignRight: Bool { self == .time }
+}
+
 /// AppKit `NSTableView`-backed track list — the single track view used across the
 /// app — giving the Music behaviours SwiftUI can't combine: edge-to-edge
 /// alternating stripes, **double-click-to-play**, reliable multi-selection,
@@ -58,6 +89,8 @@ private final class InnerTableView: NSTableView {
 struct MusicTrackTable: NSViewRepresentable {
     var tracks: [Song]
     var sortable: Bool = true
+    /// Content columns to show, in order. Caller decides explicitly.
+    var columns: [TrackColumn]
     var nowPlayingID: String?
     @Binding var selection: Set<Int>          // indices into the *displayed* order
     var isFavorite: (Song) -> Bool
@@ -98,11 +131,11 @@ struct MusicTrackTable: NSViewRepresentable {
             table.addTableColumn(c)
         }
         addColumn("indicator", "", width: 22, min: 22, max: 22)
-        addColumn("title", "Title", width: 240, min: 120, max: 10_000, sortKey: "title")
-        addColumn("artist", "Artist", width: 170, min: 80, max: 10_000, sortKey: "artist")
-        addColumn("album", "Album", width: 170, min: 80, max: 10_000, sortKey: "album")
-        addColumn("genre", "Genre", width: 100, min: 60, max: 400, sortKey: "genre")
-        addColumn("time", "Time", width: 54, min: 54, max: 80, sortKey: "time", alignRight: true)
+        for column in columns {
+            let (w, lo, hi) = column.widths
+            addColumn(column.id, column.header, width: w, min: lo, max: hi,
+                      sortKey: column.id, alignRight: column.alignRight)
+        }
         addColumn("fav", "", width: 26, min: 26, max: 26)
         // Flexible columns absorb extra width so rows/stripes fill edge-to-edge.
         table.columnAutoresizingStyle = .uniformColumnAutoresizingStyle

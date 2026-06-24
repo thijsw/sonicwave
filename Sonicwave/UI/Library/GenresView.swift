@@ -34,7 +34,7 @@ private struct GenreDetailView: View {
     @State private var tracks: [Song] = []
 
     var body: some View {
-        TrackTableView(tracks: tracks)
+        TrackTableView(tracks: tracks, columns: [.title, .artist, .album, .time])
             .navigationTitle(genre.value)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .task { tracks = await library.songs(forGenre: genre.value) }

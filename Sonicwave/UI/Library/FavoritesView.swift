@@ -10,7 +10,8 @@ struct FavoritesView: View {
                 ContentUnavailableView("No Favorites", systemImage: "star",
                                        description: Text("Songs you star will appear here."))
             } else {
-                TrackTableView(tracks: library.starredSongs)
+                TrackTableView(tracks: library.starredSongs,
+                               columns: [.title, .artist, .album, .genre, .time])
             }
         }
         .navigationTitle("Favorites")

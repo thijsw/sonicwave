@@ -15,7 +15,8 @@ struct SongsView: View {
             } else if library.songs.isEmpty, case .loading = library.songsState {
                 ProgressView()
             } else {
-                TrackTableView(tracks: library.songs)
+                TrackTableView(tracks: library.songs,
+                               columns: [.title, .artist, .album, .genre, .time])
             }
         }
         .navigationTitle("Songs")

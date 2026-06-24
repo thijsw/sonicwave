@@ -22,6 +22,7 @@ struct PlaylistDetailView: View {
                     Divider()
                     TrackTableView(
                         tracks: tracks,
+                        columns: [.title, .artist, .album, .genre, .time],
                         onRemoveFromPlaylist: { offsets in remove(offsets) },
                         onMovePlaylist: { offsets, destination in move(offsets, to: destination) }
                     )
