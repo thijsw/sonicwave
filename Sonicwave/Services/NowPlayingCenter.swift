@@ -80,7 +80,11 @@ final class NowPlayingCenter {
 
     func updateArtwork(_ image: NSImage?) {
         guard let image, var info = infoCenter.nowPlayingInfo else { return }
-        let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+        // MediaPlayer invokes this request handler on a background queue, so it
+        // must not inherit this @MainActor isolation — otherwise the Swift
+        // runtime's executor check traps (SIGTRAP) when it runs off-main. @Sendable
+        // breaks the actor inheritance so it's safe to call off the main thread.
+        let artwork = MPMediaItemArtwork(boundsSize: image.size) { @Sendable _ in image }
         info[MPMediaItemPropertyArtwork] = artwork
         infoCenter.nowPlayingInfo = info
     }
