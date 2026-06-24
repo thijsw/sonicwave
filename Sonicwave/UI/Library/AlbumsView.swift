@@ -30,6 +30,25 @@ struct AlbumsView: View {
         }
         .navigationTitle("Albums")
         .task { await library.loadAlbumsIfNeeded() }
+        .toolbar {
+            ToolbarItem {
+                Menu {
+                    Picker("Sort By", selection: Binding(
+                        get: { library.albumSortType },
+                        set: { type in Task { await library.changeAlbumSort(to: type) } }
+                    )) {
+                        Text("Recently Added").tag("newest")
+                        Text("Recently Played").tag("recent")
+                        Text("Most Played").tag("frequent")
+                        Text("Title").tag("alphabeticalByName")
+                        Text("Artist").tag("alphabeticalByArtist")
+                    }
+                } label: {
+                    Label("Sort", systemImage: "arrow.up.arrow.down")
+                }
+                .help("Sort Albums")
+            }
+        }
     }
 }
 
