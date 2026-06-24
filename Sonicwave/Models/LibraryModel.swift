@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import os
 
 /// Observable library-browsing state. Loads albums/artists/songs/genres from
 /// the server with pagination. The SwiftData cache layer is layered in during
@@ -59,7 +60,10 @@ final class LibraryModel {
     // MARK: - Albums (paginated)
 
     func loadAlbumsIfNeeded() async {
-        guard albums.isEmpty, case .idle = albumsState else { return }
+        // Retry when empty unless a request is already in flight, so a transient
+        // failure (e.g. a network timeout) doesn't blank the grid until relaunch.
+        guard albums.isEmpty else { return }
+        if case .loading = albumsState { return }
         await loadMoreAlbums()
     }
 
@@ -79,10 +83,14 @@ final class LibraryModel {
             albumsState = .loaded(())
         } catch let error as SubsonicError {
             albumsState = .failed(error.userMessage)
+            Self.log.error("album load failed: \(error.userMessage)")
         } catch {
             albumsState = .failed(error.localizedDescription)
+            Self.log.error("album load failed: \(error.localizedDescription)")
         }
     }
+
+    private static let log = Logger(subsystem: "nl.huell.sonicwave", category: "library")
 
     func changeAlbumSort(to type: String) async {
         albumSortType = type
@@ -112,7 +120,8 @@ final class LibraryModel {
     // MARK: - Songs (random sample — see endpoint note)
 
     func loadSongsIfNeeded() async {
-        guard songs.isEmpty, case .idle = songsState else { return }
+        guard songs.isEmpty else { return }
+        if case .loading = songsState { return }
         songsState = .loading
         do {
             let body = try await client.send(.randomSongs(size: 500), as: RandomSongsBody.self)
