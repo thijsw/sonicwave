@@ -20,6 +20,12 @@ struct RootView: View {
     private var selection: SidebarSelection? { SidebarSelection(rawValue: selectionRaw) }
 
     var body: some View {
+        // The now-playing experience lives in the window's real unified toolbar
+        // (see SonicwaveApp's window/toolbar style): transport + volume leading,
+        // the now-playing display centered, Up Next + search trailing. Using the
+        // native toolbar — rather than a custom bar drawn above the split view —
+        // means window dragging, traffic lights, resize and full-screen are all
+        // handled by the system.
         NavigationSplitView {
             SidebarView(selection: Binding(
                 get: { selection },
@@ -30,33 +36,33 @@ struct RootView: View {
                 detail
                     .navigationDestination(for: Album.self) { AlbumDetailView(album: $0) }
                     .navigationDestination(for: Artist.self) { ArtistDetailView(artist: $0) }
-                    .toolbar {
-                        ToolbarItem {
-                            Button {
-                                showUpNext.toggle()
-                            } label: {
-                                Label("Up Next", systemImage: "list.bullet.rectangle")
-                            }
-                            .help("Show Up Next")
-                        }
-                    }
-                    // Pinned to the detail (main) toolbar so it stays in one place,
-                    // rather than the system shuffling it between columns.
-                    .searchable(text: $searchText, placement: .toolbar, prompt: "Search")
             }
         }
-        .onChange(of: selectionRaw) { path = NavigationPath() }
-        .onChange(of: searchText.isEmpty) { path = NavigationPath() }
+        .toolbar {
+            ToolbarItemGroup(placement: .navigation) {
+                TransportControls()
+                VolumeControl()
+            }
+            ToolbarItem(placement: .principal) {
+                NowPlayingDisplay()
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button { showUpNext.toggle() } label: {
+                    Label("Up Next", systemImage: "list.bullet.rectangle")
+                }
+                .help("Show Up Next")
+            }
+        }
+        .searchable(text: $searchText, placement: .toolbar, prompt: "Search")
         .inspector(isPresented: $showUpNext) {
             UpNextView()
                 .inspectorColumnWidth(min: 240, ideal: 300, max: 420)
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            NowPlayingBar()
-        }
         .overlay {
             if !isConnected { notConnectedOverlay }
         }
+        .onChange(of: selectionRaw) { path = NavigationPath() }
+        .onChange(of: searchText.isEmpty) { path = NavigationPath() }
         .task {
             await connection.refresh()
         }

@@ -53,6 +53,8 @@ struct SidebarView: View {
             }
         }
         .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 320)
+        // Drop the automatic sidebar-toggle (we want the sidebar always visible).
+        .toolbar(removing: .sidebarToggle)
         .task {
             await library.loadPlaylistsIfNeeded()
         }

@@ -8,49 +8,61 @@ struct AlbumsView: View {
     private let columns = [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 20)]
 
     var body: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 20) {
-                ForEach(library.albums) { album in
-                    NavigationLink(value: album) {
-                        AlbumCell(album: album)
-                    }
-                    .buttonStyle(.plain)
-                    .task {
-                        if album.id == library.albums.last?.id {
-                            await library.loadMoreAlbums()
+        VStack(spacing: 0) {
+            // Sort lives in the view's own header now that the window toolbar is
+            // replaced by the custom now-playing bar.
+            HStack {
+                Spacer()
+                sortMenu
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 8)
+
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 20) {
+                    ForEach(library.albums) { album in
+                        NavigationLink(value: album) {
+                            AlbumCell(album: album)
+                        }
+                        .buttonStyle(.plain)
+                        .task {
+                            if album.id == library.albums.last?.id {
+                                await library.loadMoreAlbums()
+                            }
                         }
                     }
                 }
-            }
-            .padding(20)
+                .padding(20)
 
-            if case .loading = library.albumsState {
-                ProgressView().padding()
+                if case .loading = library.albumsState {
+                    ProgressView().padding()
+                }
             }
         }
         .navigationTitle("Albums")
         .task { await library.loadAlbumsIfNeeded() }
-        .toolbar {
-            ToolbarItem {
-                Menu {
-                    Picker("Sort By", selection: Binding(
-                        get: { library.albumSortType },
-                        set: { type in Task { await library.changeAlbumSort(to: type) } }
-                    )) {
-                        Text("Recently Added").tag("newest")
-                        Text("Recently Played").tag("recent")
-                        Text("Most Played").tag("frequent")
-                        Text("Title").tag("alphabeticalByName")
-                        Text("Artist").tag("alphabeticalByArtist")
-                    }
-                    .pickerStyle(.inline)
-                    .labelsHidden()
-                } label: {
-                    Label("Sort", systemImage: "arrow.up.arrow.down")
-                }
-                .help("Sort Albums")
+    }
+
+    private var sortMenu: some View {
+        Menu {
+            Picker("Sort By", selection: Binding(
+                get: { library.albumSortType },
+                set: { type in Task { await library.changeAlbumSort(to: type) } }
+            )) {
+                Text("Recently Added").tag("newest")
+                Text("Recently Played").tag("recent")
+                Text("Most Played").tag("frequent")
+                Text("Title").tag("alphabeticalByName")
+                Text("Artist").tag("alphabeticalByArtist")
             }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } label: {
+            Label("Sort", systemImage: "arrow.up.arrow.down")
         }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Sort Albums")
     }
 }
 

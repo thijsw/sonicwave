@@ -68,20 +68,24 @@ struct PlaylistDetailView: View {
                 .padding(.top, 4)
             }
             Spacer()
+
+            // Options live in the header now that the window toolbar is replaced
+            // by the custom now-playing bar.
+            Menu {
+                Button("Rename…") {
+                    renameText = playlist.name
+                    showRename = true
+                }
+            } label: {
+                Label("Playlist Options", systemImage: "ellipsis.circle")
+                    .labelStyle(.iconOnly)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("Playlist Options")
         }
         .padding()
-        .toolbar {
-            ToolbarItem {
-                Menu {
-                    Button("Rename…") {
-                        renameText = playlist.name
-                        showRename = true
-                    }
-                } label: {
-                    Label("Playlist Options", systemImage: "ellipsis.circle")
-                }
-            }
-        }
     }
 
     private func subtitle(_ playlist: Playlist) -> String {

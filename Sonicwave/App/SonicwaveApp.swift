@@ -16,9 +16,13 @@ struct SonicwaveApp: App {
                 .environment(app.player)
                 .environment(app.library)
                 .environment(app.connection)
-                .frame(minWidth: 900, minHeight: 560)
+                .frame(minWidth: 1000, minHeight: 560)
         }
         .defaultSize(width: 1180, height: 760)
+        // A single unified toolbar that blends with the window materials and
+        // shows no title — the now-playing header lives in it (see RootView).
+        .windowStyle(.hiddenTitleBar)
+        .windowToolbarStyle(.unified(showsTitle: false))
         .commands { SonicwaveCommands(app: app) }
 
         Settings {
