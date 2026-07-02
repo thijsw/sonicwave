@@ -79,14 +79,21 @@ struct ColumnBrowserView: View {
     private func pane(title: String, items: [String],
                       selection: Binding<String?>, allLabel: String) -> some View {
         VStack(alignment: .leading, spacing: 0) {
+            // Styled to match the track table's header row below (same type,
+            // height and hairline), so the browser reads as one table system.
             Text(title)
-                .font(.caption).bold().foregroundStyle(.secondary)
-                .padding(.horizontal, 8).padding(.vertical, 4)
+                .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                .padding(.horizontal, 8)
+                .frame(height: 24, alignment: .leading)
             Divider()
+            // Separator-free rows: the track table below draws no row rules,
+            // so the panes shouldn't either.
             List(selection: selection) {
                 Text(allLabel).tag(String?.none)
+                    .listRowSeparator(.hidden)
                 ForEach(items, id: \.self) { item in
                     Text(item).tag(String?.some(item))
+                        .listRowSeparator(.hidden)
                 }
             }
             .listStyle(.plain)

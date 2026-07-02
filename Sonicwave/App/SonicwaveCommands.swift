@@ -10,7 +10,7 @@ struct SonicwaveCommands: Commands {
 
     var body: some Commands {
         CommandGroup(after: .sidebar) {
-            Toggle("Show Up Next", isOn: $showUpNext)
+            Toggle("Show Now Playing", isOn: $showUpNext)
                 .keyboardShortcut("u", modifiers: .command)
             Toggle("Show Column Browser", isOn: $showColumnBrowser)
                 .keyboardShortcut("b", modifiers: [.command, .option])

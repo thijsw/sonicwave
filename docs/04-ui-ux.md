@@ -19,21 +19,31 @@ workflow.)
 ## Layout ✅
 
 ```
-┌──────────┬──────────────────────────────────────────────┐
-│          │  [ Genre ][ Artist ][ Album ]  ← column browser│
-│ Sidebar  ├──────────────────────────────────────────────┤
-│ (Library │                                                │
-│  /Play-  │   Track Table (dense, sortable)                │
-│  lists)  │   Title │ Artist │ Album │ Genre │ Time │ ★    │
-│          │                                                │
-├──────────┴──────────────────────────────────────────────┤
-│ Now-Playing header: artwork · title/artist · scrubber ·  │
-│ transport · volume · Up Next toggle                      │
-└──────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│ Toolbar: transport ·· [LCD now-playing] ·· volume · panel │
+├──────────┬───────────────────────────────┬───────────────┤
+│ 🔍 Search│ [ Genre ][ Artist ][ Album ]  │ NOW PLAYING ✕ │
+│ Sidebar  ├───────────────────────────────┤  hero artwork │
+│ (Library │                               │  title/artist │
+│  /Play-  │  Track Table (dense,          │  scrubber ·   │
+│  lists)  │  sortable)                    │  transport    │
+│          │                               │  UP NEXT list │
+└──────────┴───────────────────────────────┴───────────────┘
 ```
 
-A persistent now-playing header spans the bottom (iTunes-like). Up Next is a
-toggleable panel/inspector on the trailing side.
+The now-playing experience lives in the window's unified toolbar: transport
+leading, a centered "LCD" display (artwork, title, artist — album,
+elapsed/total, a hairline progress bar), volume + panel toggle trailing. The
+search field is pinned at the top of the sidebar (Music-style,
+`.searchable(placement: .sidebar)`) so it never collapses or migrates when the
+toolbar gets tight. Clicking the LCD toggles the **Now Playing panel** — a
+trailing inspector with a hero card for the current track above the Up Next
+queue.
+
+> Toolbar gotcha: SwiftUI on macOS cannot host custom toolbar items in the
+> strip above the sidebar — attaching them to the sidebar column breaks the
+> NSToolbar layout (items dumped into overflow), and `.automatic` placement
+> there silently drops the whole toolbar. Keep all items on the split view.
 
 ## Sidebar (`NavigationSplitView`) ✅
 
@@ -69,20 +79,27 @@ the panes to its right and the track table below. Implemented as adjacent
 selectable lists; selections are part of restorable view state. Toggleable
 (View menu / shortcut) so users who prefer a plain table can hide it.
 
-## Up Next / play queue ✅
+## Now Playing panel (Up Next / play queue) ✅
 
-- A panel listing the current queue with the now-playing row highlighted and
-  upcoming/history sections.
-- **Reorderable** by drag (`.onMove`), remove rows, "Play from here," clear
-  upcoming. Edits mutate `PlayerModel.queue`; gapless pre-buffer target updates
-  accordingly (see `03`).
+- A trailing inspector (`NowPlayingPanel`, ~344pt), headerless (closed via the
+  toolbar toggle, the LCD, or ⌘U): a full-bleed square hero artwork flush with
+  the panel edges and extending to the window's very top (the panel ignores
+  the top safe area — its slice of the toolbar has no items), then
+  title/artist/album, a slim scrubber with elapsed/total times, and a
+  prominent transport cluster (accent-filled play) flanked by shuffle + repeat
+  toggles (accent when active) — all on a 16pt inset shared with the Up Next
+  rows.
+- Below, the **Up Next** queue: **reorderable** by drag (`.onMove`),
+  hover-to-remove, double-click "play from here," clear upcoming. Edits mutate
+  `PlayerModel.queue`; gapless pre-buffer target updates accordingly (see `03`).
 
-## Now-playing header ✅
+## Now-playing toolbar ✅
 
-- Cached artwork thumbnail (see `05`), title + artist (click → navigate to
-  album/artist), a **scrubber** bound to throttled position (drag to seek),
-  elapsed/remaining labels, transport (prev/play-pause/next), repeat + shuffle
-  toggles, volume slider, output-device menu, Up Next toggle.
+- Transport (prev / accent play circle / next) at the leading edge; a centered
+  "LCD" capsule with cached artwork (see `05`), centered title and
+  artist — album, elapsed/total time, and a hairline accent progress bar along
+  its bottom edge; volume + panel toggle trailing. Clicking the LCD (or the
+  trailing toolbar button, or ⌘U) toggles the Now Playing panel.
 
 ## MenuBarExtra Now Playing panel ✅
 
@@ -96,9 +113,13 @@ selectable lists; selections are part of restorable view state. Toggleable
 
 ## Global search ✅
 
-- A search field in the toolbar (`.searchable`) bound to `SearchModel`, calling
-  `search3` with debounce + task cancellation (see `02`).
-- Results grouped Artists / Albums / Songs; selecting navigates or plays.
+- A search field pinned at the top of the sidebar (`.searchable(placement:
+  .sidebar)`), calling `search3` with debounce + task cancellation (see `02`).
+  Previous results stay visible while the next query runs (no spinner flash).
+- Results: an Artists shelf (circular portraits) and an Albums shelf (covers,
+  same cell as Favorites) that push the regular artist/album screens, above
+  the songs in the shared `TrackTableView` (stripes, double-click-to-play,
+  context menu, favorites, now-playing indicator).
 - ⌘F focuses search.
 
 ## Menus & keyboard shortcuts ✅

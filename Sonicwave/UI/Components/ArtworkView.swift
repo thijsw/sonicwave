@@ -19,6 +19,13 @@ struct ArtworkView: View {
         _image = State(initialValue: ArtworkCache.shared.cachedVariant(coverArt: coverArt))
     }
 
+    /// Requested pixel size: displayed points × screen scale, rounded up to a
+    /// 160px quantum so live resizes (the geometry-sized hero) reuse a handful
+    /// of cache entries instead of fetching one variant per pixel.
+    private var fetchPixels: Int {
+        max(Int((size * 2 / 160).rounded(.up)) * 160, 160)
+    }
+
     var body: some View {
         ZStack {
             if let image {
@@ -37,12 +44,14 @@ struct ArtworkView: View {
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-        .task(id: coverArt) {
+        // Keyed on the fetch size as well as the id: views measured by
+        // GeometryReader (the Now Playing hero) first render at a placeholder
+        // size, and the fetch must re-run once the real width is known.
+        .task(id: "\(coverArt ?? "")-\(fetchPixels)") {
             // Show a cached variant for this id at once, then upgrade to the
-            // exact size (keep the variant if the exact fetch fails).
+            // fetched size (keep the variant if the fetch fails).
             image = ArtworkCache.shared.cachedVariant(coverArt: coverArt)
-            let pixels = Int(size * 2)
-            if let exact = await ArtworkCache.shared.image(coverArt: coverArt, size: pixels) {
+            if let exact = await ArtworkCache.shared.image(coverArt: coverArt, size: fetchPixels) {
                 image = exact
             }
         }

@@ -5,16 +5,16 @@ import SwiftUI
 /// "LCD" now-playing display is centered, and volume sits trailing. These views
 /// are wired into the toolbar from `RootView`. See docs/04-ui-ux.md.
 
-// MARK: - Transport (leading)
+// MARK: - Transport (above the sidebar)
 
-/// Shuffle, previous, play/pause, next and repeat — the transport cluster shown
-/// at the leading edge of the toolbar, next to the window controls.
+/// Previous, play/pause and next — the transport cluster shown in the toolbar
+/// strip above the sidebar, right next to the window controls (the classic
+/// iTunes corner). Shuffle and repeat live in the Now Playing panel.
 ///
-/// Following Apple's guidance (only one prominent control), the primary
-/// prev/play/next cluster is bright (`.primary`) with the play button emphasized
-/// in a circle, while shuffle/repeat read as subordinate toggles (`.secondary`,
-/// accent when active) — matching the design's hierarchy. SF Symbols are sized
-/// with `.font(.system(size:))` rather than `.resizable()` so they stay crisp.
+/// Following Apple's guidance (only one prominent control), prev/next are
+/// bright (`.primary`) with the play button emphasized in an accent-filled
+/// circle. SF Symbols are sized with `.font(.system(size:))` rather than
+/// `.resizable()` so they stay crisp.
 struct TransportControls: View {
     @Environment(PlayerModel.self) private var player
 
@@ -22,138 +22,118 @@ struct TransportControls: View {
     private let playDiameter: CGFloat = 32
 
     var body: some View {
-        // One even 14pt rhythm across the whole cluster (matching the design),
-        // rather than the primary trio being looser than the flanking toggles.
         HStack(spacing: 14) {
-            // Subordinate: shuffle.
-            Button { player.shuffle.toggle() } label: {
-                Image(systemName: "shuffle").font(.system(size: 13))
+            Button { player.previous() } label: {
+                Image(systemName: "backward.fill").font(.system(size: 14))
             }
-            .buttonStyle(.borderless)
-            .foregroundStyle(player.shuffle ? Color.accentColor : Color.secondary)
-            .accessibilityLabel("Shuffle")
+            .accessibilityLabel("Previous")
 
-            // Primary cluster: prev / play / next — bright, evenly weighted, with
-            // the play button emphasized in a translucent circle.
-            HStack(spacing: 14) {
-                Button { player.previous() } label: {
-                    Image(systemName: "backward.fill").font(.system(size: 14))
-                }
-                .accessibilityLabel("Previous")
-
-                Button { player.togglePlayPause() } label: {
-                    Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 14))
-                        .frame(width: playDiameter, height: playDiameter)
-                        .background(.primary.opacity(0.08), in: Circle())
-                        .overlay { Circle().strokeBorder(.primary.opacity(0.12)) }
-                        .contentShape(Circle())
-                }
-                .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
-
-                Button { player.next() } label: {
-                    Image(systemName: "forward.fill").font(.system(size: 14))
-                }
-                .accessibilityLabel("Next")
-            }
-            .buttonStyle(.borderless)
-            .foregroundStyle(.primary)
-            .disabled(player.currentTrack == nil)
-
-            // Subordinate: repeat.
-            Button { player.cycleRepeat() } label: {
-                Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat")
+            Button { player.togglePlayPause() } label: {
+                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: 13))
+                    .foregroundStyle(.white)
+                    .frame(width: playDiameter, height: playDiameter)
+                    .background(Color.accentColor, in: Circle())
+                    .shadow(color: .accentColor.opacity(0.45), radius: 3, y: 1)
+                    .contentShape(Circle())
             }
-            .buttonStyle(.borderless)
-            .foregroundStyle(player.repeatMode != .off ? Color.accentColor : Color.secondary)
-            .accessibilityLabel("Repeat")
+            .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
+
+            Button { player.next() } label: {
+                Image(systemName: "forward.fill").font(.system(size: 14))
+            }
+            .accessibilityLabel("Next")
         }
+        .buttonStyle(.borderless)
+        .foregroundStyle(.primary)
+        .disabled(player.currentTrack == nil)
     }
 }
 
 // MARK: - Now-playing display (centered)
 
-/// The centered "LCD" capsule: artwork, title/artist and an inline scrubber with
-/// elapsed / remaining time. Replaces the info+scrubber portion of the old
-/// bottom bar.
+/// The centered "LCD" capsule: artwork, centered title with artist — album
+/// beneath, elapsed / total time trailing, and a thin accent progress bar along
+/// the bottom edge. Clicking it toggles the Now Playing panel (where the full
+/// scrubber lives).
 struct NowPlayingDisplay: View {
     @Environment(PlayerModel.self) private var player
-    /// Holds the in-progress scrub position so we seek once on release, not on
-    /// every value change (seeking re-opens the stream — see docs/03).
-    @State private var scrubValue: Double?
+    @AppStorage("showUpNext") private var showUpNext = false
+    @State private var hovering = false
 
     var body: some View {
-        HStack(spacing: 10) {
-            ArtworkView(coverArt: player.currentTrack?.coverArt, size: 32, cornerRadius: 5)
+        HStack(spacing: 11) {
+            ArtworkView(coverArt: player.currentTrack?.coverArt, size: 30, cornerRadius: 5)
                 .shadow(color: .black.opacity(0.4), radius: 1.5, y: 1)
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(player.currentTrack?.title ?? "Not Playing")
-                        .font(.caption).fontWeight(.semibold).lineLimit(1)
-                    Text(player.currentTrack?.artist ?? "—")
-                        .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                }
-                scrubber
+            VStack(spacing: 1) {
+                Text(player.currentTrack?.title ?? "Not Playing")
+                    .font(.caption).fontWeight(.semibold).lineLimit(1)
+                Text(subtitle)
+                    .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+
+            if player.currentTrack != nil {
+                Text("\(formatTime(player.position)) / \(formatTime(player.duration))")
+                    .font(.system(size: 9.5, design: .monospaced))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .layoutPriority(1)
             }
         }
         .padding(.horizontal, 11)
         .frame(height: 44)
-        // Flexible up to the design's 430pt, but able to shrink so the unified
-        // toolbar doesn't push the trailing items into its overflow menu on
-        // narrower windows. monospaced-digit times keep it from reflowing.
-        .frame(minWidth: 280, idealWidth: 430, maxWidth: 430)
+        // Flexible up to 430pt, but with a modest ideal width: the unified
+        // toolbar lays principal items out at their ideal size, and an ideal
+        // that only fits on wide windows shoves the trailing items (or the LCD
+        // itself) into the overflow menu once the inspector is open.
+        // monospaced-digit times keep it from reflowing.
+        .frame(minWidth: 240, idealWidth: 340, maxWidth: 430)
         // Recessed "LCD screen" look: a dark translucent fill with a soft inner
         // shadow from the top and a hairline highlight along the edge — the
         // subtle depth (matching the design's inset box-shadows) that makes the
         // capsule read as a little inset display rather than a flat chip.
+        // The progress hairline lives inside the background stack and is
+        // clipped there with the capsule fill — clipping at the outer view
+        // level let the bar's square end poke out of the rounded corner.
         .background {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.black.opacity(0.30)
-                    .shadow(.inner(color: .black.opacity(0.45), radius: 2.5, y: 1)))
+            ZStack(alignment: .bottomLeading) {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.black.opacity(0.30)
+                        .shadow(.inner(color: .black.opacity(0.45), radius: 2.5, y: 1)))
+                // Playback progress as a hairline along the LCD's bottom edge.
+                GeometryReader { geo in
+                    Rectangle()
+                        .fill(Color.accentColor)
+                        .frame(width: geo.size.width * progressFraction, height: 2)
+                        .frame(maxHeight: .infinity, alignment: .bottom)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .overlay {
             RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(.white.opacity(0.10), lineWidth: 0.5)
+                .strokeBorder(.white.opacity(hovering ? 0.22 : 0.10), lineWidth: 0.5)
         }
+        .contentShape(RoundedRectangle(cornerRadius: 8))
+        .onTapGesture { showUpNext.toggle() }
+        .onHover { hovering = $0 }
+        .help(showUpNext ? "Hide Now Playing" : "Show Now Playing")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel("Now Playing")
     }
 
-    private var scrubber: some View {
-        HStack(spacing: 7) {
-            Text(formatTime(scrubValue ?? player.position))
-                .font(.system(size: 9.5, design: .monospaced))
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-                .frame(width: 32, alignment: .leading)
-            SlimSlider(
-                value: Binding(
-                    get: { scrubValue ?? player.position },
-                    set: { scrubValue = $0 }
-                ),
-                range: 0...max(player.duration, 1),
-                fill: .accentColor
-            ) { editing in
-                if !editing, let value = scrubValue {
-                    player.seek(to: value)
-                    scrubValue = nil
-                }
-            }
-            .accessibilityLabel("Playback position")
-            Text(remaining)
-                .font(.system(size: 9.5, design: .monospaced))
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-                .frame(width: 38, alignment: .trailing)
-        }
-        .disabled(player.currentTrack == nil)
+    private var subtitle: String {
+        guard let track = player.currentTrack else { return "—" }
+        let artist = track.artist ?? "—"
+        if let album = track.album, !album.isEmpty { return "\(artist) — \(album)" }
+        return artist
     }
 
-    /// Time left in the track, shown as a negative countdown like classic iTunes.
-    private var remaining: String {
-        let left = player.duration - (scrubValue ?? player.position)
-        guard player.currentTrack != nil, left > 0 else { return "—" }
-        return "-" + formatTime(left)
+    private var progressFraction: CGFloat {
+        guard player.currentTrack != nil, player.duration > 0 else { return 0 }
+        return min(max(player.position / player.duration, 0), 1)
     }
 }
 

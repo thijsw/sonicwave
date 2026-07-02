@@ -21,11 +21,11 @@ struct RootView: View {
 
     var body: some View {
         // The now-playing experience lives in the window's real unified toolbar
-        // (see SonicwaveApp's window/toolbar style): transport + volume leading,
-        // the now-playing display centered, Up Next + search trailing. Using the
-        // native toolbar — rather than a custom bar drawn above the split view —
-        // means window dragging, traffic lights, resize and full-screen are all
-        // handled by the system.
+        // (see SonicwaveApp's window/toolbar style): transport leading, the
+        // now-playing display centered, volume + panel toggle trailing; search
+        // sits in the sidebar. Using the native toolbar — rather than a custom
+        // bar drawn above the split view — means window dragging, traffic
+        // lights, resize and full-screen are all handled by the system.
         NavigationSplitView {
             SidebarView(selection: Binding(
                 get: { selection },
@@ -39,24 +39,33 @@ struct RootView: View {
             }
         }
         .toolbar {
-            ToolbarItemGroup(placement: .navigation) {
+            // NOTE: SwiftUI on macOS cannot host custom toolbar items in the
+            // strip above the sidebar (attaching them to the sidebar column
+            // breaks the toolbar layout; .automatic there even drops the whole
+            // NSToolbar) — so the transport leads the detail column, right
+            // beside the sidebar divider, as close to the traffic lights as
+            // the framework allows.
+            ToolbarItem(placement: .navigation) {
                 TransportControls()
-                VolumeControl()
             }
             ToolbarItem(placement: .principal) {
                 NowPlayingDisplay()
             }
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .primaryAction) {
+                VolumeControl()
                 Button { showUpNext.toggle() } label: {
-                    Label("Up Next", systemImage: "list.bullet.rectangle")
+                    Label("Now Playing", systemImage: "list.bullet.rectangle")
                 }
-                .help("Show Up Next")
+                .help(showUpNext ? "Hide Now Playing" : "Show Now Playing")
             }
         }
-        .searchable(text: $searchText, placement: .toolbar, prompt: "Search")
+        // In the sidebar (Music-style): a fixed, always-expanded field that
+        // can't collapse into an icon or hop between columns the way the
+        // toolbar placement did when the inspector squeezed the detail area.
+        .searchable(text: $searchText, placement: .sidebar, prompt: "Search")
         .inspector(isPresented: $showUpNext) {
-            UpNextView()
-                .inspectorColumnWidth(min: 240, ideal: 300, max: 420)
+            NowPlayingPanel()
+                .inspectorColumnWidth(min: 300, ideal: 344, max: 420)
         }
         .overlay {
             if !isConnected { notConnectedOverlay }
