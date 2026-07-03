@@ -210,7 +210,13 @@ Status: **code-complete, builds clean, full test suite green (incl. new
   reorder ordering, rename/add/remove via `updatePlaylist`, delete, star/unstar.
 
 ### Remaining for M5 / to verify
-- 🔬 Reorder-by-replace and add/remove against a real Navidrome (no server here).
+- ✅ **Reorder-by-replace + add/remove verified against Navidrome 0.62
+  (2026-07-03),** driving the real app: Move to Top persisted across a full
+  relaunch (fresh `getPlaylist` fetch); Move Up/Down round-trips; Remove took
+  out only the targeted entry with a duplicated song present; Add to
+  Playlist ▸ appended; a final relaunch fetched the exact restored order —
+  duplicates intact throughout. (The earlier "post-relaunch order didn't
+  reflect reorders" observation did not reproduce.)
   Note: replace and bulk add/remove use **GET** query params, so very large
   playlists could hit URL-length limits — fine for typical sizes; a POST path is
   a future hardening item if needed.
