@@ -281,7 +281,9 @@ device verification** (no server/audio device here).
   600 s request timeout since long idle is by design. Remaining known log
   noise: one benign `AudioConverter … packet descriptions (0)` complaint per
   track at the end-of-stream flush (decode continuity is test-verified).
-  Final human sign-off on the audible seam: pending listener confirmation.
+  **Human-confirmed seamless by ear (2026-07-03)** — the M4 gapless-seam exit
+  criterion is met. Still open from that checklist: a cross-sample-rate
+  (44.1↔48 k) transition, untestable until the library has mixed-rate tracks.
 - 🔬 Sample-rate change across tracks (44.1↔48 k) audibly clean — device-only.
 - 🔬 Magic-cookie formats (AAC-in-MP4) — `AVAudioConverter` has no cookie API;
   ADTS/MP3/FLAC are fine; documented limitation in `03-playback-engine.md`.
