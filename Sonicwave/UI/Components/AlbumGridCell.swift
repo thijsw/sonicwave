@@ -10,17 +10,26 @@ struct AlbumGridCell: View {
     let title: String
     var subtitle: String?
 
+    @State private var hovering = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
+            // Covers lift slightly on hover (the design's cue that they're
+            // clickable), with a deeper shadow selling the elevation.
             GeometryReader { geo in
                 ArtworkView(coverArt: coverArt, size: geo.size.width, cornerRadius: 8)
             }
             .aspectRatio(1, contentMode: .fit)
-            .shadow(radius: 2, y: 1)
+            .shadow(color: .black.opacity(hovering ? 0.45 : 0.25),
+                    radius: hovering ? 9 : 2, y: hovering ? 6 : 1)
+            .offset(y: hovering ? -3 : 0)
+            .animation(.easeOut(duration: 0.15), value: hovering)
             Text(title).font(.callout).bold().lineLimit(1)
             if let subtitle, !subtitle.isEmpty {
                 Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
         }
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
     }
 }

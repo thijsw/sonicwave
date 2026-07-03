@@ -43,9 +43,12 @@ final class PlayerModel {
 
     /// Canonical (unshuffled) order, used to restore order when shuffle is off.
     @ObservationIgnored private var unshuffledOrder: [Song] = []
-    /// Queue index the engine has already pre-buffered (kept fixed when
-    /// reordering, so its scheduled audio still matches the track we display).
-    @ObservationIgnored private var committedNextIndex: Int?
+    /// Tracks handed to the engine: the queue position at hand-off (which the
+    /// engine echoes back in its events, frozen) → the entry's *current*
+    /// position. Queue edits shift positions after hand-off, so events must be
+    /// translated through this map or a boundary would advance to whatever
+    /// song now sits at the stale position.
+    @ObservationIgnored private var spanPositions: [Int: Int] = [:]
     var volume: Double = 1.0 {
         didSet { forward { await $0.setVolume(self.volume) } }
     }
@@ -107,11 +110,9 @@ final class PlayerModel {
     /// Index bookkeeping is positional, never by song id — the same song can
     /// sit in the queue twice, and an id lookup would snap to the first copy.
     func moveQueue(from offsets: IndexSet, to destination: Int) {
-        if let current = currentIndex {
-            var positions = Array(queue.indices)
-            positions.move(fromOffsets: offsets, toOffset: destination)
-            currentIndex = positions.firstIndex(of: current)
-        }
+        var positions = Array(queue.indices)
+        positions.move(fromOffsets: offsets, toOffset: destination)
+        remapPositions { positions.firstIndex(of: $0) }
         queue.move(fromOffsets: offsets, toOffset: destination)
     }
 
@@ -122,9 +123,14 @@ final class PlayerModel {
         unshuffledOrder.append(contentsOf: tracks)
         let clamped = min(max(index, 0), queue.count)
         queue.insert(contentsOf: tracks, at: clamped)
-        if let current = currentIndex, clamped <= current {
-            currentIndex = current + tracks.count
-        }
+        remapPositions { $0 >= clamped ? $0 + tracks.count : $0 }
+    }
+
+    /// Apply a position transform (from a queue mutation) to every tracked
+    /// position: the current entry and the entries handed to the engine.
+    private func remapPositions(_ transform: (Int) -> Int?) {
+        if let current = currentIndex { currentIndex = transform(current) }
+        spanPositions = spanPositions.compactMapValues(transform)
     }
 
     func removeFromQueue(at index: Int) {
@@ -138,8 +144,8 @@ final class PlayerModel {
                 setCurrent(min(index, queue.count - 1))
                 startCurrent()
             }
-        } else if let current = currentIndex, index < current {
-            currentIndex = current - 1
+        } else {
+            remapPositions { $0 == index ? nil : ($0 > index ? $0 - 1 : $0) }
         }
     }
 
@@ -228,7 +234,9 @@ final class PlayerModel {
     }
 
     private func startCurrent(from time: TimeInterval = 0) {
-        committedNextIndex = nil // a hard start resets the engine's pre-buffer
+        // A hard start resets the engine's timeline; only the current entry
+        // is handed over.
+        spanPositions = currentIndex.map { [$0: $0] } ?? [:]
         guard let track = currentTrack, let index = currentIndex else { return }
         updateNowPlayingTrack()
         let id = track.id
@@ -240,6 +248,7 @@ final class PlayerModel {
     private func clearPlayback() {
         currentTrack = nil
         currentIndex = nil
+        spanPositions = [:]
         state = .stopped
         position = 0
         duration = 0
@@ -267,7 +276,7 @@ final class PlayerModel {
     /// off restores the original relative order of the upcoming tracks.
     private func rebuildUpcoming() {
         guard let current = currentIndex else { return }
-        let pivot = max(current, committedNextIndex ?? current)
+        let pivot = max(current, spanPositions.values.max() ?? current)
         guard pivot + 1 < queue.count else { return }
         let upcoming = Array(queue[(pivot + 1)...])
         let reordered = shuffle
@@ -286,7 +295,8 @@ final class PlayerModel {
         }
     }
 
-    private func handle(_ event: PlaybackEvent) {
+    /// Internal (not private) so tests can drive engine events directly.
+    func handle(_ event: PlaybackEvent) {
         switch event {
         case let .stateChanged(newState):
             state = newState
@@ -308,31 +318,44 @@ final class PlayerModel {
         }
     }
 
-    /// The engine crossed a gapless boundary into a pre-buffered track.
-    private func gaplessAdvance(to index: Int) {
-        guard queue.indices.contains(index), index != currentIndex else { return }
+    /// The engine crossed a gapless boundary into a pre-buffered track. `echo`
+    /// is the queue position at hand-off; translate it to the entry's current
+    /// position (queue edits may have shifted it since).
+    private func gaplessAdvance(to echo: Int) {
+        // Echoes not in the map were never handed over in this timeline
+        // (stale event across a hard restart) — ignore rather than advance to
+        // whatever now sits at that position.
+        guard let index = spanPositions.removeValue(forKey: echo),
+              queue.indices.contains(index), index != currentIndex else { return }
+        let previous = currentIndex
         if let current = currentTrack { history.append(current) }
         currentIndex = index
-        committedNextIndex = nil // consumed; the next provideNext sets the new one
         currentTrack = queue[index]
         duration = TimeInterval(queue[index].duration ?? 0)
         position = 0
+        // The span that just finished is done — drop its stale mapping.
+        if let previous {
+            spanPositions = spanPositions.filter { $0.value != previous }
+        }
         updateNowPlayingTrack()
     }
 
-    /// The engine asks for the successor to pre-buffer.
-    private func provideNext(after index: Int) {
-        guard let playback else { return }
-        if let target = autoNext(after: index), queue.indices.contains(target) {
-            committedNextIndex = target
-            let song = queue[target]
-            let id = song.id
-            let suffix = song.suffix
-            let dur = TimeInterval(song.duration ?? 0)
-            Task { await playback.enqueueNext(songId: id, suffix: suffix, duration: dur, index: target) }
-        } else {
-            Task { await playback.enqueueNoMore() }
+    /// The engine asks for the successor to pre-buffer. `echo` is the position
+    /// (at hand-off) of the track that finished decoding; its successor is
+    /// computed from that entry's *current* position.
+    private func provideNext(after echo: Int) {
+        let anchor = spanPositions[echo] ?? currentIndex ?? echo
+        guard let target = autoNext(after: anchor), queue.indices.contains(target) else {
+            Task { await playback?.enqueueNoMore() }
+            return
         }
+        spanPositions[target] = target
+        guard let playback else { return }
+        let song = queue[target]
+        let id = song.id
+        let suffix = song.suffix
+        let dur = TimeInterval(song.duration ?? 0)
+        Task { await playback.enqueueNext(songId: id, suffix: suffix, duration: dur, index: target) }
     }
 
     // MARK: - Now Playing

@@ -123,4 +123,39 @@ struct QueueEditingTests {
         #expect(player.currentIndex == 1) // same song, next entry
         #expect(player.currentTrack?.id == "A")
     }
+
+    // MARK: - Gapless events vs. queue edits
+    // The engine echoes the queue position a track had at hand-off; edits made
+    // after hand-off shift positions, so events must be translated.
+
+    @Test func gaplessBoundaryFollowsPrebufferedEntryAfterInsert() {
+        let player = PlayerModel()
+        player.play(tracks: songs(["A", "B", "C"]), startAt: 0)
+        player.handle(.wantNext(afterIndex: 0))       // engine pre-buffers "B" (pos 1)
+        player.insertInQueue(songs(["X"]), at: 1)     // queue: A X B C — "B" now pos 2
+        player.handle(.trackChanged(index: 1))        // engine echoes frozen pos 1
+        #expect(player.currentTrack?.id == "B")       // advanced into "B", not "X"
+        #expect(player.currentIndex == 2)
+    }
+
+    @Test func gaplessBoundaryFollowsPrebufferedEntryAfterRemove() {
+        let player = PlayerModel()
+        player.play(tracks: songs(["A", "B", "C", "D"]), startAt: 1)
+        player.handle(.wantNext(afterIndex: 1))       // pre-buffers "C" (pos 2)
+        player.removeFromQueue(at: 0)                 // queue: B C D — "C" now pos 1
+        player.handle(.trackChanged(index: 2))        // frozen echo
+        #expect(player.currentTrack?.id == "C")
+        #expect(player.currentIndex == 1)
+    }
+
+    @Test func provideNextAnchorsOnMovedEntry() {
+        let player = PlayerModel()
+        player.play(tracks: songs(["A", "B", "C"]), startAt: 0)
+        player.moveQueue(from: IndexSet(integer: 0), to: 3) // queue: B C A, playing "A" (pos 2)
+        player.handle(.wantNext(afterIndex: 0))       // engine echoes "A"'s frozen pos 0
+        // Successor must be computed from "A"'s current position (2) → none
+        // (end of queue), not from stale position 0 (which would yield "C").
+        player.handle(.trackChanged(index: 1))        // no advance should occur into "C"
+        #expect(player.currentTrack?.id == "A")
+    }
 }

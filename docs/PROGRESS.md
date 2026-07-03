@@ -72,6 +72,13 @@ for anything the older sections below describe differently:
 - Gotchas discovered (recorded in `04-ui-ux.md`): custom toolbar items can't
   live above the sidebar; row tap gestures kill List drag-reordering;
   `.toolbarBackground(.visible)` is a no-op under `.hiddenTitleBar`.
+- **Stability: gapless events vs. queue edits.** The engine echoes the queue
+  position a track had at hand-off; queue edits after hand-off shift
+  positions, so `PlayerModel` now translates every `.trackChanged`/`.wantNext`
+  through a `spanPositions` map (hand-off echo → current position), adjusted
+  positionally by move/remove/insert alongside `currentIndex`. Unknown echoes
+  (stale across a hard restart) are ignored rather than advanced into.
+  `handle(_:)` is internal so tests drive engine events directly (3 tests).
 
 ## M6 — MenuBarExtra, search, output device 🚧
 Status: **code-complete, builds + tests green; output-device selection

@@ -386,7 +386,7 @@ struct MusicTrackTable: NSViewRepresentable {
         }
 
         @objc func doubleClicked() {
-            guard let table, table.clickedRow >= 0 else { return }
+            guard let table, displayed.indices.contains(table.clickedRow) else { return }
             // ⌥-double-click queues the track next instead of playing it.
             if NSApp.currentEvent?.modifierFlags.contains(.option) == true {
                 parent.onPlayNext(displayed[table.clickedRow])
