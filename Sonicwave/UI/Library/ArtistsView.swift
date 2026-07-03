@@ -71,13 +71,9 @@ struct ArtistDetailView: View {
                 LazyVGrid(columns: columns, spacing: 16) {
                     ForEach(albums) { album in
                         Button { navigator.openAlbum(album) } label: {
-                            VStack(alignment: .leading, spacing: 6) {
-                                ArtworkView(coverArt: album.coverArt, size: 150, cornerRadius: 8)
-                                Text(album.name).font(.callout).lineLimit(1)
-                                if let year = album.year {
-                                    Text(String(year)).font(.caption).foregroundStyle(.secondary)
-                                }
-                            }
+                            AlbumGridCell(coverArt: album.coverArt,
+                                          title: album.name,
+                                          subtitle: album.year.map(String.init))
                         }
                         .buttonStyle(.plain)
                     }

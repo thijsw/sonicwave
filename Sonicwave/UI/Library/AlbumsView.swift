@@ -23,7 +23,9 @@ struct AlbumsView: View {
                 LazyVGrid(columns: columns, spacing: 20) {
                     ForEach(library.albums) { album in
                         Button { navigator.openAlbum(album) } label: {
-                            AlbumCell(album: album)
+                            AlbumGridCell(coverArt: album.coverArt,
+                                          title: album.name,
+                                          subtitle: album.artist ?? "—")
                         }
                         .buttonStyle(.plain)
                         .task {
@@ -64,18 +66,5 @@ struct AlbumsView: View {
         .menuStyle(.borderlessButton)
         .fixedSize()
         .help("Sort Albums")
-    }
-}
-
-private struct AlbumCell: View {
-    let album: Album
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ArtworkView(coverArt: album.coverArt, size: 170, cornerRadius: 8)
-                .shadow(radius: 2, y: 1)
-            Text(album.name).font(.callout).bold().lineLimit(1)
-            Text(album.artist ?? "—").font(.caption).foregroundStyle(.secondary).lineLimit(1)
-        }
     }
 }
