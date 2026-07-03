@@ -291,6 +291,12 @@ final class LibraryModel {
         }
     }
 
+    /// The full album record for an id — used by "Go to Album" from a track,
+    /// where only the song's `albumId` is at hand.
+    func album(id: String) async -> Album? {
+        try? await client.send(.album(id: id), as: AlbumBody.self).album
+    }
+
     func albums(forArtist id: String) async -> [Album] {
         do {
             let body = try await client.send(.artist(id: id), as: ArtistBody.self)

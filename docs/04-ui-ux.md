@@ -65,11 +65,13 @@ Selection drives the detail area. `LibraryModel` backs the content.
   Album, Genre, Time, plus the now-playing speaker and ★ columns. Per-view
   column sets.
 - Dense row height; right-aligned monospaced-digit time; edge-to-edge stripes.
-- Double-click (or ⏎) plays the row and sets the queue from the current view.
+- Double-click (or ⏎) plays the row and sets the queue from the current view;
+  **⌥-double-click queues it next**.
 - Context menu: Play, Play Next, Add to Up Next, Add to Playlist ▸ (incl. New
-  Playlist…), Add/Remove Favorites; playlist mode adds Move to Top/Up/Down/
-  Bottom + Remove from Playlist.
-  ⏳ Pending: ⌥-double-click = Play Next; Go to Album/Artist; Get Info.
+  Playlist…), Add/Remove Favorites, Go to Album / Go to Artist (single
+  selection); playlist mode adds Move to Top/Up/Down/Bottom + Remove from
+  Playlist.
+  ⏳ Pending: Get Info.
 - Multi-select; drag selected rows to a playlist in the sidebar.
   ⏳ Pending: dropping rows into the Up Next panel.
 

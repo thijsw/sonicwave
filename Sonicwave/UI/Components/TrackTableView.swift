@@ -17,6 +17,7 @@ struct TrackTableView: View {
 
     @Environment(LibraryModel.self) private var library
     @Environment(PlayerModel.self) private var player
+    @Environment(Navigator.self) private var navigator
 
     @State private var selection = Set<Int>()
     /// Optimistic favorite state so the star reflects taps before the reload.
@@ -36,6 +37,7 @@ struct TrackTableView: View {
             selection: $selection,
             isFavorite: { isStarred($0) },
             onPlay: { displayed, index in player.play(tracks: displayed, startAt: index) },
+            onPlayNext: { song in player.playNext([song]) },
             onToggleFavorite: { song in toggleStar([song.id], star: !isStarred(song)) },
             makeMenu: { displayed, indices in buildMenu(displayed, indices) }
         )
@@ -91,6 +93,26 @@ struct TrackTableView: View {
         menu.addItem(ClosureMenuItem(title: allStarred ? "Remove from Favorites" : "Add to Favorites") {
             toggleStar(chosen.map(\.id), star: !allStarred)
         })
+
+        // Navigation to the track's album/artist — single selection only.
+        if chosen.count == 1, let song = chosen.first,
+           song.albumId != nil || song.artistId != nil {
+            menu.addItem(.separator())
+            if let albumId = song.albumId {
+                menu.addItem(ClosureMenuItem(title: "Go to Album") {
+                    Task {
+                        if let album = await library.album(id: albumId) {
+                            navigator.openAlbum(album)
+                        }
+                    }
+                })
+            }
+            if let artistId = song.artistId {
+                menu.addItem(ClosureMenuItem(title: "Go to Artist") {
+                    navigator.openArtist(Artist(id: artistId, name: song.artist ?? "—"))
+                })
+            }
+        }
 
         if isPlaylist {
             menu.addItem(.separator())

@@ -108,6 +108,7 @@ struct MusicTrackTable: NSViewRepresentable {
     @Binding var selection: Set<Int>          // indices into the *displayed* order
     var isFavorite: (Song) -> Bool
     var onPlay: ([Song], Int) -> Void          // displayed order + start index
+    var onPlayNext: (Song) -> Void             // ⌥-double-click: queue as next
     var onToggleFavorite: (Song) -> Void
     var makeMenu: ([Song], IndexSet) -> NSMenu?  // displayed order + selected indices
 
@@ -330,7 +331,12 @@ struct MusicTrackTable: NSViewRepresentable {
 
         @objc func doubleClicked() {
             guard let table, table.clickedRow >= 0 else { return }
-            parent.onPlay(displayed, table.clickedRow)
+            // ⌥-double-click queues the track next instead of playing it.
+            if NSApp.currentEvent?.modifierFlags.contains(.option) == true {
+                parent.onPlayNext(displayed[table.clickedRow])
+            } else {
+                parent.onPlay(displayed, table.clickedRow)
+            }
         }
 
         @objc func favoriteClicked(_ sender: NSButton) {
