@@ -242,7 +242,9 @@ struct MusicTrackTable: NSViewRepresentable {
 
         func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
             guard displayed.indices.contains(row),
-                  let data = try? JSONEncoder().encode(DraggedTrack(songId: displayed[row].id, index: row))
+                  let data = try? JSONEncoder().encode(DraggedTrack(songId: displayed[row].id,
+                                                                    index: row,
+                                                                    song: displayed[row]))
             else { return nil }
             let item = NSPasteboardItem()
             item.setData(data, forType: NSPasteboard.PasteboardType(UTType.json.identifier))

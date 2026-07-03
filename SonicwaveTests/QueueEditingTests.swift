@@ -48,6 +48,22 @@ struct QueueEditingTests {
         #expect(player.currentIndex == 2)
     }
 
+    @Test func insertInQueueAtPositionKeepsCurrentTracked() {
+        let player = PlayerModel()
+        player.play(tracks: songs(["1", "2", "3"]), startAt: 1)
+        player.insertInQueue(songs(["9", "8"]), at: 1) // insert before current
+        #expect(player.queue.map(\.id) == ["1", "9", "8", "2", "3"])
+        #expect(player.currentTrack?.id == "2")
+        #expect(player.currentIndex == 3)
+    }
+
+    @Test func insertInQueueClampsIndex() {
+        let player = PlayerModel()
+        player.play(tracks: songs(["1"]), startAt: 0)
+        player.insertInQueue(songs(["9"]), at: 42)
+        #expect(player.queue.map(\.id) == ["1", "9"])
+    }
+
     @Test func clearUpNextTrimsAfterCurrent() {
         let player = PlayerModel()
         player.play(tracks: songs(["1", "2", "3", "4"]), startAt: 1)

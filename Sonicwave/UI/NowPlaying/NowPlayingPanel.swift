@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// The Now Playing / Up Next panel, shown as an inspector on the trailing edge:
 /// a hero card for the current track (artwork, metadata, scrubber, transport)
@@ -53,6 +54,12 @@ struct NowPlayingPanel: View {
                 Text("Nothing up next")
                     .foregroundStyle(.secondary).font(.callout)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .dropDestination(for: DraggedTrack.self) { items, _ in
+                        let songs = items.compactMap(\.song)
+                        guard !songs.isEmpty else { return false }
+                        player.enqueue(songs)
+                        return true
+                    }
             } else {
                 // The ForEach holds only the upcoming slice (no conditional
                 // rows — those break the List's row-drag reordering); its
@@ -82,10 +89,37 @@ struct NowPlayingPanel: View {
                         player.moveQueue(from: IndexSet(offsets.map { $0 + base }),
                                          to: destination + base)
                     }
+                    // External drops (rows dragged from any track table)
+                    // insert at the drop position; internal reorders still go
+                    // through .onMove.
+                    .onInsert(of: [.json]) { position, providers in
+                        insertDropped(providers, at: base + position)
+                    }
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
             }
+        }
+    }
+
+    /// Decode `DraggedTrack` payloads from dropped item providers (in order)
+    /// and insert their songs at the given queue index.
+    private func insertDropped(_ providers: [NSItemProvider], at index: Int) {
+        Task {
+            var songs: [Song] = []
+            for provider in providers {
+                let data: Data? = await withCheckedContinuation { continuation in
+                    _ = provider.loadDataRepresentation(forTypeIdentifier: UTType.json.identifier) { data, _ in
+                        continuation.resume(returning: data)
+                    }
+                }
+                if let data,
+                   let dragged = try? JSONDecoder().decode(DraggedTrack.self, from: data),
+                   let song = dragged.song {
+                    songs.append(song)
+                }
+            }
+            player.insertInQueue(songs, at: index)
         }
     }
 }

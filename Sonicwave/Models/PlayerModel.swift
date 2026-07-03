@@ -109,6 +109,15 @@ final class PlayerModel {
         reindexCurrent()
     }
 
+    /// Insert tracks at a specific queue position (drag-into-Up-Next),
+    /// keeping the current track tracked.
+    func insertInQueue(_ tracks: [Song], at index: Int) {
+        guard !tracks.isEmpty else { return }
+        unshuffledOrder.append(contentsOf: tracks)
+        queue.insert(contentsOf: tracks, at: min(max(index, 0), queue.count))
+        reindexCurrent()
+    }
+
     func removeFromQueue(at index: Int) {
         guard queue.indices.contains(index) else { return }
         let removingCurrent = index == currentIndex

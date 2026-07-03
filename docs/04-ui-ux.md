@@ -72,8 +72,8 @@ Selection drives the detail area. `LibraryModel` backs the content.
   selection); playlist mode adds Move to Top/Up/Down/Bottom + Remove from
   Playlist.
   ⏳ Pending: Get Info.
-- Multi-select; drag selected rows to a playlist in the sidebar.
-  ⏳ Pending: dropping rows into the Up Next panel.
+- Multi-select; drag selected rows to a playlist in the sidebar, or into the
+  Up Next queue (position-aware insert; the payload carries the full song).
 
 ## Column browser ✅
 
