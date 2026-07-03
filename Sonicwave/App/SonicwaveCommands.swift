@@ -12,6 +12,7 @@ struct SonicwaveCommands: Commands {
         CommandGroup(after: .sidebar) {
             Toggle("Show Now Playing", isOn: $showUpNext)
                 .keyboardShortcut("u", modifiers: .command)
+                .disabled(app.player.currentTrack == nil && app.player.upNext.isEmpty)
             Toggle("Show Column Browser", isOn: $showColumnBrowser)
                 .keyboardShortcut("b", modifiers: [.command, .option])
             Divider()

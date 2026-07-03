@@ -7,6 +7,7 @@ struct RootView: View {
     @Environment(AppModel.self) private var app
     @Environment(ConnectionModel.self) private var connection
     @Environment(LibraryModel.self) private var library
+    @Environment(PlayerModel.self) private var player
 
     // Persisted across launches so the app reopens on the last-used section.
     // @AppStorage (not @SceneStorage) so it restores regardless of the system's
@@ -33,7 +34,15 @@ struct RootView: View {
                 set: { selectionRaw = ($0 ?? .albums).rawValue }
             ))
         } detail: {
-            detail
+            // The pinned hairline is the toolbar's bottom border — and it
+            // keeps scrollable content from extending up under the (fully
+            // transparent) toolbar: scroll views only underlap a safe-area
+            // edge they sit flush against, and without a NavigationStack
+            // there's no scroll-edge material to blur what pokes through.
+            VStack(spacing: 0) {
+                Divider()
+                detail
+            }
         }
         .toolbar {
             // NOTE: SwiftUI on macOS cannot host custom toolbar items in the
@@ -42,25 +51,37 @@ struct RootView: View {
             // NSToolbar) — so the transport leads the detail column, right
             // beside the sidebar divider, as close to the traffic lights as
             // the framework allows.
+            // Breathing room at both toolbar ends nudges the transport and
+            // volume clusters toward the center.
             ToolbarItem(placement: .navigation) {
                 TransportControls()
+                    .padding(.leading, 16)
             }
             ToolbarItem(placement: .principal) {
                 NowPlayingDisplay()
             }
-            ToolbarItemGroup(placement: .primaryAction) {
-                VolumeControl()
-                Button { showUpNext.toggle() } label: {
-                    Label("Now Playing", systemImage: "list.bullet.rectangle")
+            ToolbarItem(placement: .primaryAction) {
+                HStack(spacing: 14) {
+                    VolumeControl()
+                    Button { showUpNext.toggle() } label: {
+                        Label("Now Playing", systemImage: "list.bullet.rectangle")
+                    }
+                    .help(showUpNext ? "Hide Now Playing" : "Show Now Playing")
+                    .disabled(!nowPlayingAvailable)
                 }
-                .help(showUpNext ? "Hide Now Playing" : "Show Now Playing")
+                .padding(.trailing, 16)
             }
         }
         // In the sidebar (Music-style): a fixed, always-expanded field that
         // can't collapse into an icon or hop between columns the way the
         // toolbar placement did when the inspector squeezed the detail area.
         .searchable(text: $searchText, placement: .sidebar, prompt: "Search")
-        .inspector(isPresented: $showUpNext) {
+        // The panel only presents while it has something to show; the stored
+        // preference survives, so it reappears when playback starts again.
+        .inspector(isPresented: Binding(
+            get: { showUpNext && nowPlayingAvailable },
+            set: { showUpNext = $0 }
+        )) {
             NowPlayingPanel()
                 .inspectorColumnWidth(min: 300, ideal: 344, max: 420)
         }
@@ -102,6 +123,12 @@ struct RootView: View {
     private var isConnected: Bool {
         if case .connected = connection.state { return true }
         return connection.isConfigured
+    }
+
+    /// The Now Playing panel is only relevant while something is playing or
+    /// queued.
+    private var nowPlayingAvailable: Bool {
+        player.currentTrack != nil || !player.upNext.isEmpty
     }
 
     @ViewBuilder

@@ -82,7 +82,10 @@ selectable lists; selections are part of restorable view state. Toggleable
 ## Now Playing panel (Up Next / play queue) ✅
 
 - A trailing inspector (`NowPlayingPanel`, ~344pt), headerless (closed via the
-  toolbar toggle, the LCD, or ⌘U): a full-bleed square hero artwork flush with
+  toolbar toggle, the LCD, or ⌘U). Only presentable while something is playing
+  or queued — otherwise it stays hidden (no empty state) and its toggles are
+  disabled; the stored preference survives, so it reappears when playback
+  starts. Contents: a full-bleed square hero artwork flush with
   the panel edges and extending to the window's very top (the panel ignores
   the top safe area — its slice of the toolbar has no items), then
   title/artist/album, a slim scrubber with elapsed/total times, and a

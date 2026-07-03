@@ -84,12 +84,12 @@ struct NowPlayingDisplay: View {
         }
         .padding(.horizontal, 11)
         .frame(height: 44)
-        // Flexible up to 430pt, but with a modest ideal width: the unified
+        // Flexible up to 560pt, but with a restrained ideal width: the unified
         // toolbar lays principal items out at their ideal size, and an ideal
         // that only fits on wide windows shoves the trailing items (or the LCD
         // itself) into the overflow menu once the inspector is open.
         // monospaced-digit times keep it from reflowing.
-        .frame(minWidth: 240, idealWidth: 340, maxWidth: 430)
+        .frame(minWidth: 260, idealWidth: 400, maxWidth: 560)
         // Recessed "LCD screen" look: a dark translucent fill with a soft inner
         // shadow from the top and a hairline highlight along the edge — the
         // subtle depth (matching the design's inset box-shadows) that makes the
@@ -117,7 +117,12 @@ struct NowPlayingDisplay: View {
                 .strokeBorder(.white.opacity(hovering ? 0.22 : 0.10), lineWidth: 0.5)
         }
         .contentShape(RoundedRectangle(cornerRadius: 8))
-        .onTapGesture { showUpNext.toggle() }
+        .onTapGesture {
+            // The panel is only relevant while something is playing or queued.
+            if player.currentTrack != nil || !player.upNext.isEmpty {
+                showUpNext.toggle()
+            }
+        }
         .onHover { hovering = $0 }
         .help(showUpNext ? "Hide Now Playing" : "Show Now Playing")
         .accessibilityAddTraits(.isButton)

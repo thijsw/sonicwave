@@ -7,29 +7,25 @@ import SwiftUI
 struct NowPlayingPanel: View {
     @Environment(PlayerModel.self) private var player
 
+    // No empty state: the panel is only presented when something is playing
+    // or queued (RootView gates the inspector on that).
     var body: some View {
-        if player.currentTrack == nil && player.upNext.isEmpty {
-            ContentUnavailableView("Not Playing", systemImage: "music.note",
-                                   description: Text("Tracks you play appear here."))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            VStack(spacing: 0) {
-                if let current = player.currentTrack {
-                    // Priority so the full-bleed square hero keeps its
-                    // width-sized height; the queue list takes what's left
-                    // instead of compressing the artwork.
-                    CurrentTrackCard(song: current)
-                        .layoutPriority(1)
-                    Divider()
-                }
-                queue
+        VStack(spacing: 0) {
+            if let current = player.currentTrack {
+                // Priority so the full-bleed square hero keeps its
+                // width-sized height; the queue list takes what's left
+                // instead of compressing the artwork.
+                CurrentTrackCard(song: current)
+                    .layoutPriority(1)
+                Divider()
             }
-            // With a hero, extend to the window's very top: the inspector has
-            // no toolbar items, so its slice of the toolbar is dead space —
-            // the artwork fills it, showing through the toolbar material.
-            .ignoresSafeArea(player.currentTrack != nil ? .container : SafeAreaRegions(),
-                             edges: .top)
+            queue
         }
+        // With a hero, extend to the window's very top: the inspector has
+        // no toolbar items, so its slice of the toolbar is dead space —
+        // the artwork fills it, showing through the toolbar material.
+        .ignoresSafeArea(player.currentTrack != nil ? .container : SafeAreaRegions(),
+                         edges: .top)
     }
 
     private var queue: some View {
