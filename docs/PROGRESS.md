@@ -271,7 +271,17 @@ device verification** (no server/audio device here).
 - Tests: `QueueEditingTests` (7) added; full suite green.
 
 ### Remaining for M4 / to verify
-- 🔬 Gapless seam (no gap/overlap) on a real gapless album — device-only.
+- ✅ **Gapless seam instrumentally verified (2026-07-03):** three consecutive
+  Abbey Road medley boundaries (Golden Slumbers → Carry That Weight → The End
+  → Her Majesty) crossed on-device with **zero underruns** (the starvation
+  detector never fired) and **zero HAL overloads/skipped IO cycles** in the
+  unified log; the album played to completion. Found & fixed along the way:
+  pre-buffer streams suspended by the read-ahead throttle were hitting
+  URLSession's default 60 s request timeout (-1001) — the loader now uses a
+  600 s request timeout since long idle is by design. Remaining known log
+  noise: one benign `AudioConverter … packet descriptions (0)` complaint per
+  track at the end-of-stream flush (decode continuity is test-verified).
+  Final human sign-off on the audible seam: pending listener confirmation.
 - 🔬 Sample-rate change across tracks (44.1↔48 k) audibly clean — device-only.
 - 🔬 Magic-cookie formats (AAC-in-MP4) — `AVAudioConverter` has no cookie API;
   ADTS/MP3/FLAC are fine; documented limitation in `03-playback-engine.md`.

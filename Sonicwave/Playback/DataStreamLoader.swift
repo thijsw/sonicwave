@@ -14,7 +14,13 @@ final class DataStreamLoader: NSObject, URLSessionDataDelegate, @unchecked Senda
     func stream(from url: URL) -> AsyncThrowingStream<Data, Error> {
         AsyncThrowingStream { continuation in
             self.continuation = continuation
-            let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
+            let config = URLSessionConfiguration.default
+            // Read-ahead throttling deliberately suspends this transfer for as
+            // long as the buffered look-ahead lasts (TCP back-pressure), so
+            // long idle stretches are expected — the default 60 s request
+            // timeout was killing paused pre-buffer streams mid-track (-1001).
+            config.timeoutIntervalForRequest = 600
+            let session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
             self.session = session
             let task = session.dataTask(with: url)
             self.task = task
