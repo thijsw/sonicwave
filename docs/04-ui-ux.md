@@ -50,26 +50,28 @@ queue.
 Grouped like iTunes, using `Section`s and SF Symbols:
 
 - **Library**
-  - Albums · Artists · Songs · Genres · Favorites (starred)
+  - Albums · Artists · Songs · Favorites (starred). Genre browsing lives in
+    the column browser (no separate sidebar item).
 - **Playlists**
   - The user's server playlists (live from `getPlaylists`), each selectable;
     context menu for rename/delete; "+" to create.
 
-Selection drives the detail area. `LibraryModel`/`PlaylistsModel` back the
-content; sidebar shows lightweight counts where cheap.
+Selection drives the detail area. `LibraryModel` backs the content.
 
 ## Track table ✅
 
-- SwiftUI **`Table`** with sortable columns: Title, Artist, Album, Genre, Time
-  (duration), Track #, Year, ★ (starred toggle). Default + per-view column
-  sets; user-adjustable sort (`TableColumnSort`).
-- Dense row height; right-align numeric columns; monospaced-digit time.
-- Double-click (or ⏎) plays the row and sets the queue from the current view;
-  ⌥-double-click / context menu "Play Next" / "Add to Up Next".
-- Context menu: Play, Play Next, Add to Up Next, Add to Playlist ▸, Star/Unstar,
-  Go to Album/Artist, Get Info.
-- Multi-select; drag selected rows to a playlist in the sidebar or into Up Next.
-- Virtualized/lazy rows; paginate from `LibraryStore` (see `02`/`05`).
+- AppKit-backed **`MusicTrackTable`** (via the `TrackTableView` wrapper — see
+  the M5 notes in `PROGRESS.md`) with click-to-sort columns: Title, Artist,
+  Album, Genre, Time, plus the now-playing speaker and ★ columns. Per-view
+  column sets.
+- Dense row height; right-aligned monospaced-digit time; edge-to-edge stripes.
+- Double-click (or ⏎) plays the row and sets the queue from the current view.
+- Context menu: Play, Play Next, Add to Up Next, Add to Playlist ▸ (incl. New
+  Playlist…), Add/Remove Favorites; playlist mode adds Move to Top/Up/Down/
+  Bottom + Remove from Playlist.
+  ⏳ Pending: ⌥-double-click = Play Next; Go to Album/Artist; Get Info.
+- Multi-select; drag selected rows to a playlist in the sidebar.
+  ⏳ Pending: dropping rows into the Up Next panel.
 
 ## Column browser ✅
 
@@ -112,8 +114,11 @@ selectable lists; selections are part of restorable view state. Toggleable
 - `MenuBarExtra` with **`.menuBarExtraStyle(.window)`** dropping a compact
   panel modeled on the modern macOS Music / Control Center Now Playing dropdown
   (this replaces the old iTunes MiniPlayer):
-  - Large artwork, title/artist/album, scrubber, transport, volume,
-    output-device quick-switch.
+  - Large artwork, title/artist, the inspector's slim accent scrubber with
+    elapsed/total times, and its transport row (accent play circle flanked by
+    shuffle + repeat toggles).
+  - ⏳ Pending: volume + output-device quick-switch (output device lives in
+    Settings → Playback for now).
 - Observes the same `PlayerModel` instance as the main window (shared via the
   environment) so it never drifts. Works while the main window is closed.
 

@@ -45,6 +45,34 @@ xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
 
 ---
 
+## UI overhaul — Cadence design pass (2026-07-02/03)
+Status: **done & live-verified (computer-use driving the real app).** The
+visual direction moved from the old bottom-bar layout to the Cadence design
+project (see `09-design-system.md` for the source). Highlights, with pointers
+for anything the older sections below describe differently:
+- **Now-playing toolbar** — transport (prev / accent play circle / next)
+  leading, a centered "LCD" (artwork, title, artist — album, elapsed/total,
+  accent progress hairline; click toggles the panel), volume + panel toggle
+  trailing. `NowPlayingBar` (bottom bar) is gone; see `NowPlayingToolbar.swift`.
+- **Now Playing panel** — `UpNextView` → `NowPlayingPanel.swift`: headerless
+  inspector, full-bleed hero artwork to the window top, slim scrubber,
+  transport with shuffle/repeat, aligned Up Next queue (drag-to-reorder,
+  hover play/remove). Only presentable while something plays or is queued.
+- **Search** — field pinned at the top of the sidebar
+  (`.searchable(placement: .sidebar)`, ⌘F focuses); results are artist/album
+  shelves over the shared track table.
+- **No NavigationStack** — in-place navigation via `Navigator` (opened album
+  overlays the section with an inline Back link; Artists is a master-detail
+  split). `GenresView` was folded into the column browser.
+- **Consistency fixes** — shared `AlbumGridCell` (covers fill adaptive grid
+  cells), column-browser panes match the table header style, content no
+  longer scrolls under the transparent toolbar (pinned hairline).
+- **Menu-bar panel** — restyled to the same design language (slim scrubber +
+  times, accent play, shuffle/repeat).
+- Gotchas discovered (recorded in `04-ui-ux.md`): custom toolbar items can't
+  live above the sidebar; row tap gestures kill List drag-reordering;
+  `.toolbarBackground(.visible)` is a no-op under `.hiddenTitleBar`.
+
 ## M6 — MenuBarExtra, search, output device 🚧
 Status: **code-complete, builds + tests green; output-device selection
 live-verified (single device); multi-device switching/route-change need device

@@ -14,6 +14,8 @@ struct RootView: View {
     // window-restoration setting; the app is effectively single-window.
     @AppStorage("sidebarSelection") private var selectionRaw = SidebarSelection.albums.rawValue
     @State private var searchText = ""
+    /// Programmatic focus for the sidebar search field (⌘F).
+    @State private var searchPresented = false
     /// In-place navigation (opened album, artist hand-off) — no NavigationStack.
     @State private var navigator = Navigator()
     @AppStorage("showUpNext") private var showUpNext = false
@@ -75,7 +77,15 @@ struct RootView: View {
         // In the sidebar (Music-style): a fixed, always-expanded field that
         // can't collapse into an icon or hop between columns the way the
         // toolbar placement did when the inspector squeezed the detail area.
-        .searchable(text: $searchText, placement: .sidebar, prompt: "Search")
+        .searchable(text: $searchText, isPresented: $searchPresented,
+                    placement: .sidebar, prompt: "Search")
+        // ⌘F focuses the search field — a hidden shortcut button, since
+        // .searchable has no command-level focus hook.
+        .background {
+            Button("") { searchPresented = true }
+                .keyboardShortcut("f", modifiers: .command)
+                .hidden()
+        }
         // The panel only presents while it has something to show; the stored
         // preference survives, so it reappears when playback starts again.
         .inspector(isPresented: Binding(
