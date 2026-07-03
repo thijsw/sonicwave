@@ -104,9 +104,15 @@ final class PlayerModel {
     }
 
     /// Move queue items (SwiftUI `onMove`), keeping the current track tracked.
+    /// Index bookkeeping is positional, never by song id — the same song can
+    /// sit in the queue twice, and an id lookup would snap to the first copy.
     func moveQueue(from offsets: IndexSet, to destination: Int) {
+        if let current = currentIndex {
+            var positions = Array(queue.indices)
+            positions.move(fromOffsets: offsets, toOffset: destination)
+            currentIndex = positions.firstIndex(of: current)
+        }
         queue.move(fromOffsets: offsets, toOffset: destination)
-        reindexCurrent()
     }
 
     /// Insert tracks at a specific queue position (drag-into-Up-Next),
@@ -114,8 +120,11 @@ final class PlayerModel {
     func insertInQueue(_ tracks: [Song], at index: Int) {
         guard !tracks.isEmpty else { return }
         unshuffledOrder.append(contentsOf: tracks)
-        queue.insert(contentsOf: tracks, at: min(max(index, 0), queue.count))
-        reindexCurrent()
+        let clamped = min(max(index, 0), queue.count)
+        queue.insert(contentsOf: tracks, at: clamped)
+        if let current = currentIndex, clamped <= current {
+            currentIndex = current + tracks.count
+        }
     }
 
     func removeFromQueue(at index: Int) {
@@ -129,8 +138,8 @@ final class PlayerModel {
                 setCurrent(min(index, queue.count - 1))
                 startCurrent()
             }
-        } else {
-            reindexCurrent()
+        } else if let current = currentIndex, index < current {
+            currentIndex = current - 1
         }
     }
 
@@ -236,11 +245,6 @@ final class PlayerModel {
         duration = 0
         forward { await $0.stop() }
         nowPlaying?.update(track: nil, state: .stopped, position: 0, duration: 0)
-    }
-
-    private func reindexCurrent() {
-        guard let id = currentTrack?.id else { return }
-        currentIndex = queue.firstIndex { $0.id == id }
     }
 
     /// Successor for automatic (gapless) advance — honors repeat-one (loop).

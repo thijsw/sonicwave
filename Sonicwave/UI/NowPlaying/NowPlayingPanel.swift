@@ -69,7 +69,11 @@ struct NowPlayingPanel: View {
                     // NOTE: no tap gestures / contentShape on these rows —
                     // they claim the mouse-down and kill .onMove row dragging.
                     // Play-from-here is the hover button and the context menu.
-                    ForEach(Array(player.upNext.enumerated()), id: \.element.id) { pair in
+                    // Positional identity: the same song can sit in the queue
+                    // twice, and duplicate ids make SwiftUI coalesce rows
+                    // (shared hover state, callbacks bound to the first
+                    // instance, phantom removals).
+                    ForEach(Array(player.upNext.enumerated()), id: \.offset) { pair in
                         QueueRow(song: pair.element,
                                  onPlay: { player.playFromQueue(at: base + pair.offset) },
                                  onRemove: { player.removeFromQueue(at: base + pair.offset) })

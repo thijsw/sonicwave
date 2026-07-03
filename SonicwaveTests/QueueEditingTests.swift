@@ -79,4 +79,48 @@ struct QueueEditingTests {
         #expect(player.currentTrack?.id == "3")
         #expect(player.isPlaying)
     }
+
+    // MARK: - Duplicate songs in the queue
+    // Index bookkeeping must be positional: an id lookup snaps to the first
+    // copy of a duplicated song.
+
+    @Test func removeBeforeCurrentDuplicateKeepsCurrentEntry() {
+        let player = PlayerModel()
+        player.play(tracks: songs(["A", "B", "A"]), startAt: 2) // playing the 2nd "A"
+        player.removeFromQueue(at: 1) // remove "B"
+        #expect(player.queue.map(\.id) == ["A", "A"])
+        #expect(player.currentIndex == 1) // still the 2nd "A", not the 1st
+    }
+
+    @Test func moveQueueWithDuplicatesKeepsCurrentEntry() {
+        let player = PlayerModel()
+        player.play(tracks: songs(["A", "B", "A"]), startAt: 2) // playing the 2nd "A"
+        player.moveQueue(from: IndexSet(integer: 1), to: 0) // move "B" to front
+        #expect(player.queue.map(\.id) == ["B", "A", "A"])
+        #expect(player.currentIndex == 2) // followed the entry, not the id
+    }
+
+    @Test func insertBeforeCurrentDuplicateShiftsCurrent() {
+        let player = PlayerModel()
+        player.play(tracks: songs(["A", "A"]), startAt: 1) // playing the 2nd "A"
+        player.insertInQueue(songs(["9"]), at: 1)
+        #expect(player.queue.map(\.id) == ["A", "9", "A"])
+        #expect(player.currentIndex == 2)
+    }
+
+    @Test func playFromQueueSelectsTheDuplicateEntry() {
+        let player = PlayerModel()
+        player.play(tracks: songs(["A", "B", "A"]), startAt: 0)
+        player.playFromQueue(at: 2) // the 2nd "A"
+        #expect(player.currentIndex == 2)
+        #expect(player.upNext.isEmpty)
+    }
+
+    @Test func nextAdvancesIntoSameSong() {
+        let player = PlayerModel()
+        player.play(tracks: songs(["A", "A", "B"]), startAt: 0)
+        player.next()
+        #expect(player.currentIndex == 1) // same song, next entry
+        #expect(player.currentTrack?.id == "A")
+    }
 }
