@@ -14,6 +14,11 @@ milestone first. See `10-roadmap.md` for the full milestone plan.
 - Project uses Xcode 16+ **synchronized file groups**, so new `.swift` files
   under `Sonicwave/` and `SonicwaveTests/` are picked up automatically without
   editing the project file.
+- **Debug builds sign with the Developer ID identity** (Huell B.V.,
+  `4HNWJ993V9`; manual style, hardened runtime off for Debug). Ad-hoc signing
+  gave every build a new designated requirement, so the keychain re-prompted
+  for the server credential on each rebuild; the certificate-based requirement
+  is stable, so one "Always Allow" sticks. Release is untouched.
 
 ## Milestone status
 M0 ✅ · M1 ✅ (auth/endpoints live-verified vs Navidrome 0.62) ·
