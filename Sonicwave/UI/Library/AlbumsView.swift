@@ -4,6 +4,7 @@ import SwiftUI
 /// opens its track list. See docs/04-ui-ux.md.
 struct AlbumsView: View {
     @Environment(LibraryModel.self) private var library
+    @Environment(Navigator.self) private var navigator
 
     private let columns = [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 20)]
 
@@ -21,7 +22,7 @@ struct AlbumsView: View {
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 20) {
                     ForEach(library.albums) { album in
-                        NavigationLink(value: album) {
+                        Button { navigator.openAlbum(album) } label: {
                             AlbumCell(album: album)
                         }
                         .buttonStyle(.plain)

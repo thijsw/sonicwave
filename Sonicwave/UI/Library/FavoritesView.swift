@@ -3,6 +3,7 @@ import SwiftUI
 /// Starred albums (a shelf) and starred songs. Maps to getStarred2.
 struct FavoritesView: View {
     @Environment(LibraryModel.self) private var library
+    @Environment(Navigator.self) private var navigator
 
     private var isEmpty: Bool {
         library.starredSongs.isEmpty && library.starredAlbums.isEmpty
@@ -39,7 +40,7 @@ struct FavoritesView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 14) {
                     ForEach(library.starredAlbums) { album in
-                        NavigationLink(value: album) {
+                        Button { navigator.openAlbum(album) } label: {
                             VStack(alignment: .leading, spacing: 4) {
                                 ArtworkView(coverArt: album.coverArt, size: 110, cornerRadius: 6)
                                 Text(album.name).font(.caption).lineLimit(1)

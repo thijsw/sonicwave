@@ -13,7 +13,8 @@ struct RootView: View {
     // window-restoration setting; the app is effectively single-window.
     @AppStorage("sidebarSelection") private var selectionRaw = SidebarSelection.albums.rawValue
     @State private var searchText = ""
-    @State private var path = NavigationPath()
+    /// In-place navigation (opened album, artist hand-off) — no NavigationStack.
+    @State private var navigator = Navigator()
     @AppStorage("showUpNext") private var showUpNext = false
     @Environment(\.openSettings) private var openSettings
 
@@ -32,11 +33,7 @@ struct RootView: View {
                 set: { selectionRaw = ($0 ?? .albums).rawValue }
             ))
         } detail: {
-            NavigationStack(path: $path) {
-                detail
-                    .navigationDestination(for: Album.self) { AlbumDetailView(album: $0) }
-                    .navigationDestination(for: Artist.self) { ArtistDetailView(artist: $0) }
-            }
+            detail
         }
         .toolbar {
             // NOTE: SwiftUI on macOS cannot host custom toolbar items in the
@@ -70,14 +67,23 @@ struct RootView: View {
         .overlay {
             if !isConnected { notConnectedOverlay }
         }
-        .onChange(of: selectionRaw) { path = NavigationPath() }
-        .onChange(of: searchText.isEmpty) { path = NavigationPath() }
+        .environment(navigator)
+        // Switching sections or editing the query leaves the opened album.
+        .onChange(of: selectionRaw) { navigator.album = nil }
+        .onChange(of: searchText) { navigator.album = nil }
+        // Search hands an artist off to the Artists section.
+        .onChange(of: navigator.pendingArtist) { _, artist in
+            if artist != nil {
+                selectionRaw = SidebarSelection.artists.rawValue
+                searchText = ""
+            }
+        }
         .task {
             await connection.refresh()
         }
         // Drive section loading here rather than from each detail view's own
-        // `.task`: a view nested as the NavigationStack root doesn't reliably run
-        // its `.task` on initial launch, which left the first screen blank.
+        // `.task`: the detail root view didn't reliably run its `.task` on
+        // initial launch, which left the first screen blank.
         .task(id: selectionRaw) {
             await load(selection)
         }
@@ -100,7 +106,11 @@ struct RootView: View {
 
     @ViewBuilder
     private var detail: some View {
-        if !searchText.isEmpty {
+        // An opened album renders in place of the current section (with its
+        // own inline Back link); search results sit under that.
+        if let album = navigator.album {
+            AlbumDetailView(album: album)
+        } else if !searchText.isEmpty {
             SearchResultsView(query: searchText)
         } else {
             switch selection {

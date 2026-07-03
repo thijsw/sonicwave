@@ -1,12 +1,14 @@
 import SwiftUI
 
-/// A dedicated album screen (pushed onto the navigation stack): a header with
-/// artwork, title, artist, year + play/shuffle/favorite, then the track list
-/// rendered with the shared `TrackTableView`. Mirrors `PlaylistDetailView`.
+/// A dedicated album screen, shown in place of the current section (no
+/// navigation stack — the inline Back link closes it via `Navigator`): a
+/// header with artwork, title, artist, year + play/shuffle/favorite, then the
+/// track list rendered with the shared `TrackTableView`.
 struct AlbumDetailView: View {
     let album: Album
     @Environment(LibraryModel.self) private var library
     @Environment(PlayerModel.self) private var player
+    @Environment(Navigator.self) private var navigator
     @State private var tracks: [Song] = []
     @State private var starredOverride: Bool?
 
@@ -22,7 +24,6 @@ struct AlbumDetailView: View {
             Divider()
             TrackTableView(tracks: tracks, columns: [.title, .artist, .genre, .time])
         }
-        .navigationTitle(album.name)
         .task(id: album.id) {
             tracks = await library.songs(forAlbum: album.id)
             await library.loadStarredIfNeeded()
@@ -31,6 +32,20 @@ struct AlbumDetailView: View {
 
     @ViewBuilder
     private var header: some View {
+        // Inline back affordance replacing the navigation stack's chrome.
+        HStack {
+            Button { navigator.closeAlbum() } label: {
+                Label("Back", systemImage: "chevron.backward")
+                    .font(.callout.weight(.semibold))
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(Color.accentColor)
+            .accessibilityLabel("Back")
+            Spacer()
+        }
+        .padding(.horizontal)
+        .padding(.top, 10)
+
         HStack(alignment: .top, spacing: 16) {
             ArtworkView(coverArt: album.coverArt, size: 96, cornerRadius: 8)
             VStack(alignment: .leading, spacing: 6) {

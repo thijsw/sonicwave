@@ -117,9 +117,20 @@ selectable lists; selections are part of restorable view state. Toggleable
   .sidebar)`), calling `search3` with debounce + task cancellation (see `02`).
   Previous results stay visible while the next query runs (no spinner flash).
 - Results: an Artists shelf (circular portraits) and an Albums shelf (covers,
-  same cell as Favorites) that push the regular artist/album screens, above
-  the songs in the shared `TrackTableView` (stripes, double-click-to-play,
-  context menu, favorites, now-playing indicator).
+  same cell as Favorites) that open the regular artist/album screens in place,
+  above the songs in the shared `TrackTableView` (stripes,
+  double-click-to-play, context menu, favorites, now-playing indicator).
+
+## Navigation (no stack) ✅
+
+- The app deliberately has **no `NavigationStack`** — no push/pop and no
+  toolbar back/forward chrome. `Navigator` (environment observable) holds the
+  in-place state: an opened album renders over the current section with an
+  inline accent "‹ Back" link; switching sections or editing the search query
+  closes it.
+- Artists is a master-detail split (artist list left, albums right); search
+  hands an artist off via `Navigator.pendingArtist` (selects it in the Artists
+  section and clears the query).
 - ⌘F focuses search.
 
 ## Menus & keyboard shortcuts ✅

@@ -8,6 +8,7 @@ import SwiftUI
 struct SearchResultsView: View {
     let query: String
     @Environment(LibraryModel.self) private var library
+    @Environment(Navigator.self) private var navigator
     @State private var results = LibraryModel.SearchResults()
     @State private var isSearching = false
 
@@ -60,7 +61,7 @@ struct SearchResultsView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 14) {
                     ForEach(results.artists) { artist in
-                        NavigationLink(value: artist) {
+                        Button { navigator.openArtist(artist) } label: {
                             VStack(spacing: 6) {
                                 ArtworkView(coverArt: artist.coverArt, size: 64, cornerRadius: 32)
                                 Text(artist.name).font(.caption).lineLimit(1)
@@ -84,7 +85,7 @@ struct SearchResultsView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 14) {
                     ForEach(results.albums) { album in
-                        NavigationLink(value: album) {
+                        Button { navigator.openAlbum(album) } label: {
                             VStack(alignment: .leading, spacing: 4) {
                                 ArtworkView(coverArt: album.coverArt, size: 110, cornerRadius: 6)
                                 Text(album.name).font(.caption).lineLimit(1)
