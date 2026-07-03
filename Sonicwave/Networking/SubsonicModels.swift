@@ -34,6 +34,31 @@ struct Song: Identifiable, Codable, Sendable, Hashable {
     /// Genre for display, preferring the legacy field, then the OpenSubsonic array.
     var displayGenre: String? { genre ?? genres?.first?.name }
 
+    /// File suffixes of lossless encodings, where the format says more than the
+    /// (high, variable) bit rate.
+    private static let losslessSuffixes: Set<String> = [
+        "flac", "alac", "wav", "aif", "aiff", "ape", "dsf", "dff", "wv", "shn",
+    ]
+
+    /// Short encoding label for quality-minded listeners: the format name for
+    /// lossless files ("FLAC", "AIFF"), the bit rate for lossy ones
+    /// ("320 kbps"), the bare suffix as a fallback.
+    var qualityLabel: String? {
+        if let suffix = suffix?.lowercased(), Self.losslessSuffixes.contains(suffix) {
+            return suffix == "aif" ? "AIFF" : suffix.uppercased()
+        }
+        if let bitRate, bitRate > 0 { return "\(bitRate) kbps" }
+        return suffix?.uppercased()
+    }
+
+    /// Sort key for the Quality column: lossless above any lossy bit rate.
+    var qualityRank: Int {
+        if let suffix = suffix?.lowercased(), Self.losslessSuffixes.contains(suffix) {
+            return 100_000 + (bitRate ?? 0)
+        }
+        return bitRate ?? 0
+    }
+
     enum CodingKeys: String, CodingKey {
         case id, title, artist, artistId, album, albumId, coverArt, duration
         case track, discNumber, year, genre, genres, bitRate, suffix, contentType, size, starred

@@ -60,7 +60,7 @@ struct ColumnBrowserView: View {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 TrackTableView(tracks: filteredTracks,
-                               columns: [.title, .artist, .album, .genre, .time])
+                               columns: [.title, .artist, .album, .genre, .quality, .time])
             }
         }
         .task {

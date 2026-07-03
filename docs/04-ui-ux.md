@@ -62,8 +62,12 @@ Selection drives the detail area. `LibraryModel` backs the content.
 
 - AppKit-backed **`MusicTrackTable`** (via the `TrackTableView` wrapper — see
   the M5 notes in `PROGRESS.md`) with click-to-sort columns: Title, Artist,
-  Album, Genre, Time, plus the now-playing speaker and ★ columns. Per-view
-  column sets.
+  Album, Genre, Quality, Time, plus the now-playing speaker and ★ columns.
+  Per-view column sets.
+- **Quality column**: a small outline badge per song — format name for
+  lossless files ("FLAC", "AIFF"), bit rate for lossy ("320 kbps") — via
+  `Song.qualityLabel`; sorting ranks lossless above any lossy bit rate. The
+  same badge appears under the album line on the Now Playing hero card.
 - Dense row height; right-aligned monospaced-digit time; edge-to-edge stripes.
 - Double-click (or ⏎) plays the row and sets the queue from the current view;
   **⌥-double-click queues it next**.

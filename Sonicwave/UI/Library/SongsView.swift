@@ -16,7 +16,7 @@ struct SongsView: View {
                 ProgressView()
             } else {
                 TrackTableView(tracks: library.songs,
-                               columns: [.title, .artist, .album, .genre, .time])
+                               columns: [.title, .artist, .album, .genre, .quality, .time])
             }
         }
         .navigationTitle("Songs")

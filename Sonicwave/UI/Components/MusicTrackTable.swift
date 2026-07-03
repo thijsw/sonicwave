@@ -39,6 +39,54 @@ private final class SecondaryTextCell: NSTableCellView {
     }
 }
 
+/// Cell for the Quality column: a small rounded-outline badge ("FLAC",
+/// "320 kbps") — white on the selected (emphasized) row like the other cells.
+private final class QualityBadgeCell: NSTableCellView {
+    private let badge = NSView()
+    private let label = NSTextField(labelWithString: "")
+
+    init(text: String) {
+        super.init(frame: .zero)
+        badge.wantsLayer = true
+        badge.layer?.cornerRadius = 3
+        badge.layer?.borderWidth = 1
+        badge.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(badge)
+
+        label.stringValue = text
+        label.font = .systemFont(ofSize: 9.5, weight: .medium)
+        label.lineBreakMode = .byTruncatingTail
+        label.translatesAutoresizingMaskIntoConstraints = false
+        badge.addSubview(label)
+
+        NSLayoutConstraint.activate([
+            badge.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
+            badge.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -4),
+            badge.centerYAnchor.constraint(equalTo: centerYAnchor),
+            label.leadingAnchor.constraint(equalTo: badge.leadingAnchor, constant: 4),
+            label.trailingAnchor.constraint(equalTo: badge.trailingAnchor, constant: -4),
+            label.topAnchor.constraint(equalTo: badge.topAnchor, constant: 1.5),
+            label.bottomAnchor.constraint(equalTo: badge.bottomAnchor, constant: -1.5),
+        ])
+        applyColors()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) not supported") }
+
+    override var backgroundStyle: NSView.BackgroundStyle {
+        didSet { applyColors() }
+    }
+
+    private func applyColors() {
+        let emphasized = backgroundStyle == .emphasized
+        label.textColor = emphasized ? .alternateSelectedControlTextColor : .secondaryLabelColor
+        badge.layer?.borderColor = emphasized
+            ? NSColor.alternateSelectedControlTextColor.withAlphaComponent(0.6).cgColor
+            : NSColor.tertiaryLabelColor.cgColor
+    }
+}
+
 /// NSTableView subclass that surfaces a per-row context menu and Return-to-play.
 private final class InnerTableView: NSTableView {
     var contextMenuProvider: ((IndexSet) -> NSMenu?)?
@@ -67,18 +115,18 @@ private final class InnerTableView: NSTableView {
 /// favorite-star columns are always present (fixed-width affordances); these are
 /// the content columns each call site opts into explicitly.
 enum TrackColumn {
-    case title, artist, album, genre, time
+    case title, artist, album, genre, quality, time
 
     var id: String {
         switch self {
         case .title: "title"; case .artist: "artist"; case .album: "album"
-        case .genre: "genre"; case .time: "time"
+        case .genre: "genre"; case .quality: "quality"; case .time: "time"
         }
     }
     var header: String {
         switch self {
         case .title: "Title"; case .artist: "Artist"; case .album: "Album"
-        case .genre: "Genre"; case .time: "Time"
+        case .genre: "Genre"; case .quality: "Quality"; case .time: "Time"
         }
     }
     /// (default, min, max) widths.
@@ -88,6 +136,7 @@ enum TrackColumn {
         case .artist: (170, 80, 10_000)
         case .album: (170, 80, 10_000)
         case .genre: (100, 60, 400)
+        case .quality: (78, 64, 110)
         case .time: (54, 54, 80)
         }
     }
@@ -214,6 +263,7 @@ struct MusicTrackTable: NSViewRepresentable {
                 case "artist": result = (a.artist ?? "").localizedCaseInsensitiveCompare(b.artist ?? "") == .orderedAscending
                 case "album": result = (a.album ?? "").localizedCaseInsensitiveCompare(b.album ?? "") == .orderedAscending
                 case "genre": result = (a.displayGenre ?? "").localizedCaseInsensitiveCompare(b.displayGenre ?? "") == .orderedAscending
+                case "quality": result = a.qualityRank < b.qualityRank
                 case "time": result = (a.duration ?? 0) < (b.duration ?? 0)
                 default: result = a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
                 }
@@ -273,6 +323,10 @@ struct MusicTrackTable: NSViewRepresentable {
                     ])
                 }
                 return cell
+
+            case "quality":
+                guard let label = song.qualityLabel else { return NSTableCellView() }
+                return QualityBadgeCell(text: label)
 
             case "fav":
                 let cell = NSTableCellView()

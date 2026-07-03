@@ -22,7 +22,7 @@ struct AlbumDetailView: View {
         VStack(spacing: 0) {
             header
             Divider()
-            TrackTableView(tracks: tracks, columns: [.title, .artist, .genre, .time])
+            TrackTableView(tracks: tracks, columns: [.title, .artist, .genre, .quality, .time])
         }
         .task(id: album.id) {
             tracks = await library.songs(forAlbum: album.id)

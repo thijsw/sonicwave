@@ -160,6 +160,19 @@ private struct CurrentTrackCard: View {
                         .lineLimit(1)
                         .padding(.top, 1)
                 }
+                // Encoding badge ("FLAC", "320 kbps") for the quality-minded.
+                if let quality = song.qualityLabel {
+                    Text(quality)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 4)
+                                .strokeBorder(.tertiary, lineWidth: 1)
+                        }
+                        .padding(.top, 7)
+                }
 
                 // Scrubber + times.
                 SlimSlider(
