@@ -54,27 +54,33 @@ struct NowPlayingPanel: View {
                     .foregroundStyle(.secondary).font(.callout)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
+                // The ForEach holds only the upcoming slice (no conditional
+                // rows — those break the List's row-drag reordering); its
+                // local indices map back to queue offsets via `base`.
+                let base = (player.currentIndex ?? -1) + 1
                 List {
-                    ForEach(Array(player.queue.enumerated()), id: \.element.id) { pair in
-                        if pair.offset > (player.currentIndex ?? -1) {
-                            QueueRow(song: pair.element) { player.removeFromQueue(at: pair.offset) }
-                                .contentShape(Rectangle())
-                                .onTapGesture(count: 2) { player.playFromQueue(at: pair.offset) }
-                                .contextMenu {
-                                    Button("Play") { player.playFromQueue(at: pair.offset) }
-                                    Button("Remove", role: .destructive) {
-                                        player.removeFromQueue(at: pair.offset)
-                                    }
+                    // NOTE: no tap gestures / contentShape on these rows —
+                    // they claim the mouse-down and kill .onMove row dragging.
+                    // Play-from-here is the hover button and the context menu.
+                    ForEach(Array(player.upNext.enumerated()), id: \.element.id) { pair in
+                        QueueRow(song: pair.element,
+                                 onPlay: { player.playFromQueue(at: base + pair.offset) },
+                                 onRemove: { player.removeFromQueue(at: base + pair.offset) })
+                            .contextMenu {
+                                Button("Play") { player.playFromQueue(at: base + pair.offset) }
+                                Button("Remove", role: .destructive) {
+                                    player.removeFromQueue(at: base + pair.offset)
                                 }
-                                .listRowSeparator(.hidden)
-                                // Zero row insets: the row's own 8pt padding is
-                                // the hover-highlight bleed, putting content at
-                                // ~16pt — aligned with the header and hero meta.
-                                .listRowInsets(EdgeInsets())
-                        }
+                            }
+                            .listRowSeparator(.hidden)
+                            // Zero row insets: the row's own 8pt padding is
+                            // the hover-highlight bleed, putting content at
+                            // ~16pt — aligned with the header and hero meta.
+                            .listRowInsets(EdgeInsets())
                     }
                     .onMove { offsets, destination in
-                        player.moveQueue(from: offsets, to: destination)
+                        player.moveQueue(from: IndexSet(offsets.map { $0 + base }),
+                                         to: destination + base)
                     }
                 }
                 .listStyle(.plain)
@@ -224,16 +230,33 @@ private struct HeroArtwork: View {
     }
 }
 
-/// A queued track. Shows its duration, or a remove button on hover, with a
-/// soft rounded hover highlight.
+/// A queued track with a soft rounded hover highlight. Hovering reveals a
+/// play button over the artwork and swaps the duration for a remove button —
+/// buttons only, so the row body stays free for drag-to-reorder.
 private struct QueueRow: View {
     let song: Song
+    var onPlay: () -> Void
     var onRemove: () -> Void
     @State private var hovering = false
 
     var body: some View {
         HStack(spacing: 10) {
-            ArtworkView(coverArt: song.coverArt, size: 36, cornerRadius: 6)
+            Button(action: onPlay) {
+                ArtworkView(coverArt: song.coverArt, size: 36, cornerRadius: 6)
+                    .overlay {
+                        if hovering {
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(.black.opacity(0.45))
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 14))
+                                .foregroundStyle(.white)
+                        }
+                    }
+            }
+            .buttonStyle(.plain)
+            .help("Play")
+            .accessibilityLabel("Play \(song.title)")
+
             VStack(alignment: .leading, spacing: 1) {
                 Text(song.title)
                     .font(.body.weight(.medium)).lineLimit(1)

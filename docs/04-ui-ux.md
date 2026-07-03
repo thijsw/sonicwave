@@ -93,8 +93,11 @@ selectable lists; selections are part of restorable view state. Toggleable
   toggles (accent when active) — all on a 16pt inset shared with the Up Next
   rows.
 - Below, the **Up Next** queue: **reorderable** by drag (`.onMove`),
-  hover-to-remove, double-click "play from here," clear upcoming. Edits mutate
-  `PlayerModel.queue`; gapless pre-buffer target updates accordingly (see `03`).
+  hover-to-remove, "play from here" via a hover play button on the artwork
+  (and the context menu), clear upcoming. Edits mutate `PlayerModel.queue`;
+  gapless pre-buffer target updates accordingly (see `03`).
+  Gotcha: rows must NOT carry `.contentShape`/tap gestures — they claim the
+  mouse-down and silently disable the List's row-drag reordering.
 
 ## Now-playing toolbar ✅
 
