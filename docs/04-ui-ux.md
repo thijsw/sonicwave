@@ -68,10 +68,9 @@ Selection drives the detail area. `LibraryModel` backs the content.
 - Double-click (or ⏎) plays the row and sets the queue from the current view;
   **⌥-double-click queues it next**.
 - Context menu: Play, Play Next, Add to Up Next, Add to Playlist ▸ (incl. New
-  Playlist…), Add/Remove Favorites, Go to Album / Go to Artist (single
-  selection); playlist mode adds Move to Top/Up/Down/Bottom + Remove from
-  Playlist.
-  ⏳ Pending: Get Info.
+  Playlist…), Add/Remove Favorites, Get Info (read-only sheet — tag editing is
+  post-v1), Go to Album / Go to Artist (single selection); playlist mode adds
+  Move to Top/Up/Down/Bottom + Remove from Playlist.
 - Multi-select; drag selected rows to a playlist in the sidebar, or into the
   Up Next queue (position-aware insert; the payload carries the full song).
 

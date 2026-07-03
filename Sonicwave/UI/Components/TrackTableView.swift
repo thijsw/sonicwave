@@ -25,6 +25,8 @@ struct TrackTableView: View {
     @State private var showNewPlaylist = false
     @State private var newPlaylistName = ""
     @State private var pendingSongIds: [String] = []
+    /// Track shown in the "Get Info" sheet (nil = none).
+    @State private var infoSong: Song?
 
     private var isPlaylist: Bool { onMovePlaylist != nil || onRemoveFromPlaylist != nil }
 
@@ -41,6 +43,9 @@ struct TrackTableView: View {
             onToggleFavorite: { song in toggleStar([song.id], star: !isStarred(song)) },
             makeMenu: { displayed, indices in buildMenu(displayed, indices) }
         )
+        .sheet(item: $infoSong) { song in
+            TrackInfoView(song: song)
+        }
         .alert("New Playlist", isPresented: $showNewPlaylist) {
             TextField("Name", text: $newPlaylistName)
             Button("Create") {
@@ -94,10 +99,10 @@ struct TrackTableView: View {
             toggleStar(chosen.map(\.id), star: !allStarred)
         })
 
-        // Navigation to the track's album/artist — single selection only.
-        if chosen.count == 1, let song = chosen.first,
-           song.albumId != nil || song.artistId != nil {
+        // Get Info + navigation to the track's album/artist — single selection.
+        if chosen.count == 1, let song = chosen.first {
             menu.addItem(.separator())
+            menu.addItem(ClosureMenuItem(title: "Get Info") { infoSong = song })
             if let albumId = song.albumId {
                 menu.addItem(ClosureMenuItem(title: "Go to Album") {
                     Task {
