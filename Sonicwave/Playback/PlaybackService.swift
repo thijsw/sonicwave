@@ -45,6 +45,12 @@ actor PlaybackService {
     private var outstandingBuffers = 0
     private var noMoreTracks = false
     private var reportedIndex: Int?
+    /// Last position reported by tick() — the recovery fallback when the node
+    /// clock is already gone (config changes reset `lastRenderTime`).
+    private var lastPosition: TimeInterval = 0
+    /// When the last recovery ran; config-change echoes provoked by the
+    /// recovery itself (engine rebuild, format renegotiation) are swallowed.
+    private var lastRecovery: ContinuousClock.Instant?
     private var awaitingNext = false
 
     private var generation = 0
@@ -251,7 +257,7 @@ actor PlaybackService {
             // device's hardware format differs (seen with a USB DAC: audio
             // gone until a full rebuild). Rebuild + restart at the playhead
             // instead — a sub-second gap, but reliable on every device.
-            recoverPlayback()
+            recoverPlayback(force: true)
         } else {
             applyOutputDevice()
         }
@@ -273,13 +279,20 @@ actor PlaybackService {
         }
     }
 
-    /// Engine I/O config changed (route change / default device / format). Keep
-    /// the chosen device, then make sure the engine is running and audio resumes.
+    /// Engine I/O config changed (default device switched, hardware format
+    /// changed, route rebuilt). The engine stops itself, and the node's clock
+    /// and scheduled buffers can't be trusted afterwards — restarting in place
+    /// stranded the read-ahead (a system-default switch froze pinned
+    /// playback). Recover fully; the echo guard in recoverPlayback keeps the
+    /// notifications this recovery provokes from looping.
     private func handleConfigChange() {
         guard engineConnected else { return }
-        applyOutputDevice()
-        if !engine.isRunning { try? engine.start() }
-        if hasStartedPlayback, !isPaused, !node.isPlaying { node.play() }
+        if hasStartedPlayback {
+            recoverPlayback()
+        } else {
+            applyOutputDevice()
+            if !engine.isRunning { try? engine.start() }
+        }
     }
 
     /// A device appeared or disappeared. Only Sonicwave's own pinned route is
@@ -296,18 +309,24 @@ actor PlaybackService {
         // swap isn't trustworthy — rebuild and resume at the playhead.
         Self.log.info("output route target changed; recovering")
         if hasStartedPlayback {
-            recoverPlayback()
+            recoverPlayback(force: true)
         } else {
             applyOutputDevice()
         }
     }
 
     /// Rebuild the route and hard-restart the current track at the playhead —
-    /// the reliable way out of a render graph wedged on vanished hardware
-    /// (reuses the seek path). Keeps the paused state.
-    private func recoverPlayback() {
-        let active = activeSpan()
-        var position = active?.seekBase ?? 0
+    /// the reliable way out of a render graph wedged by any route/config
+    /// change (reuses the seek path). Keeps the paused state. `force` is for
+    /// deliberate switches; unforced calls (config-change notifications)
+    /// within a second of a recovery are treated as its echoes and swallowed.
+    private func recoverPlayback(force: Bool = false) {
+        if !force, let last = lastRecovery, last.duration(to: .now) < .seconds(1) { return }
+        lastRecovery = .now
+        // Prefer the reported span (the node clock may already be dead, and
+        // the sample-time fallback would misattribute multi-track timelines).
+        let active = spans.first { $0.index == reportedIndex } ?? activeSpan()
+        var position = lastPosition
         if let active, let sample = currentSampleTime(), sample >= active.startFrame {
             position = active.seekBase + Double(sample - active.startFrame) / canonicalFormat.sampleRate
             if active.duration > 0 { position = min(position, active.duration) }
@@ -446,7 +465,8 @@ actor PlaybackService {
         let rate = canonicalFormat.sampleRate
         let elapsed = span.seekBase + Double(sample - span.startFrame) / rate
         let clamped = span.duration > 0 ? min(elapsed, span.duration) : elapsed
-        emit(.position(time: max(0, clamped), duration: span.duration))
+        lastPosition = max(0, clamped)
+        emit(.position(time: lastPosition, duration: span.duration))
     }
 
     private func currentSampleTime() -> AVAudioFramePosition? {
