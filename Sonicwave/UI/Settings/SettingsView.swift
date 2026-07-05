@@ -80,6 +80,16 @@ private struct PlaybackSettingsView: View {
     @Environment(AppModel.self) private var app
     @State private var devices: [AudioDevice] = []
     @AppStorage("outputDeviceUID") private var outputDeviceUID = ""
+    /// Remembered name of the chosen device, so it can be shown while the
+    /// device is disconnected (the UID alone is unreadable).
+    @AppStorage("outputDeviceName") private var outputDeviceName = ""
+
+    /// The chosen device is currently absent (e.g. Bluetooth disconnected).
+    /// Audio falls back to the system default; the choice sticks so it re-pins
+    /// when the device returns.
+    private var selectionDisconnected: Bool {
+        !outputDeviceUID.isEmpty && !devices.contains { $0.uid == outputDeviceUID }
+    }
 
     var body: some View {
         @Bindable var connection = connection
@@ -90,10 +100,19 @@ private struct PlaybackSettingsView: View {
                     ForEach(devices) { device in
                         Text(device.name).tag(device.uid)
                     }
+                    if selectionDisconnected {
+                        Text("\(outputDeviceName.isEmpty ? "Selected device" : outputDeviceName) (disconnected)")
+                            .tag(outputDeviceUID)
+                    }
                 }
                 .onChange(of: outputDeviceUID) {
                     let uid = outputDeviceUID.isEmpty ? nil : outputDeviceUID
+                    outputDeviceName = devices.first { $0.uid == outputDeviceUID }?.name ?? outputDeviceName
                     Task { await app.playback.setOutputDevice(uid: uid) }
+                }
+                if selectionDisconnected {
+                    Text("Playing through the system default until it reconnects.")
+                        .font(.callout).foregroundStyle(.secondary)
                 }
             }
             Section("Streaming") {
@@ -121,6 +140,17 @@ private struct PlaybackSettingsView: View {
         }
         .formStyle(.grouped)
         .padding()
-        .task { devices = AudioOutputDevices.all() }
+        // Enumerate now, then re-enumerate on every device-list change so the
+        // picker tracks connects/disconnects live while the pane is open.
+        .task {
+            devices = AudioOutputDevices.all()
+            let changes = AsyncStream<Void> { continuation in
+                let observer = AudioDeviceListObserver { continuation.yield(()) }
+                continuation.onTermination = { _ in _ = observer }
+            }
+            for await _ in changes {
+                devices = AudioOutputDevices.all()
+            }
+        }
     }
 }

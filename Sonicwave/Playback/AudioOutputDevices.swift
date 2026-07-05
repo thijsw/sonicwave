@@ -9,12 +9,36 @@ struct AudioDevice: Identifiable, Hashable, Sendable {
     let name: String
 }
 
+/// Fires `onChange` whenever the system's audio device list changes (device
+/// connected / disconnected). Callback arrives on a private queue.
+final class AudioDeviceListObserver: @unchecked Sendable {
+    private let queue = DispatchQueue(label: "nl.huell.sonicwave.audio-devices")
+    private let block: AudioObjectPropertyListenerBlock
+    private var address = AudioObjectPropertyAddress(
+        mSelector: kAudioHardwarePropertyDevices,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain)
+
+    init(onChange: @escaping @Sendable () -> Void) {
+        block = { _, _ in onChange() }
+        AudioObjectAddPropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject), &address, queue, block)
+    }
+
+    deinit {
+        AudioObjectRemovePropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject), &address, queue, block)
+    }
+}
+
 /// Thin Core Audio wrapper to enumerate output-capable devices and resolve the
 /// system default. See docs/03-playback-engine.md (output device selection).
 enum AudioOutputDevices {
     private static let system = AudioObjectID(kAudioObjectSystemObject)
 
-    /// All devices that can play audio out.
+    /// All devices that can play audio out. Core Audio's transient private
+    /// aggregates (created when the default device switches mid-render) are
+    /// excluded — they're plumbing, not user-selectable outputs.
     static func all() -> [AudioDevice] {
         var addr = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDevices,
@@ -27,6 +51,7 @@ enum AudioOutputDevices {
         var ids = [AudioDeviceID](repeating: 0, count: count)
         guard AudioObjectGetPropertyData(system, &addr, 0, nil, &size, &ids) == noErr else { return [] }
         return ids.filter(hasOutput).compactMap(device(for:))
+            .filter { !$0.uid.hasPrefix("CADefaultDeviceAggregate") }
     }
 
     /// The current system default output device id, if any.

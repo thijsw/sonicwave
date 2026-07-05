@@ -106,9 +106,27 @@ testing.**
   - Verified live (computer-use): picker enumerates real devices (System Default +
     MacBook Pro Speakers), selecting an explicit device persists and plays with
     no engine errors / 0 IO overloads.
-  - ⚠️ Switching *between* multiple devices mid-playback and physical
-    route-changes (unplug) couldn't be exercised (one output device available);
-    the config-change handler is in place but unverified on hardware.
+  - ✅ **Multi-device switching + route changes human-verified (2026-07-05)**
+    against a USB DAC (Cambridge Audio CXA81) alongside MacBook/Studio Display
+    speakers: mid-track switches amp → speakers → amp all audible; yanking the
+    amp's USB mid-track fell back to the system default and kept playing from
+    the playhead; replugging re-pinned to the amp automatically. Findings
+    fixed along the way (see `PlaybackService`/`AudioOutputDevices`):
+    - A **live device swap wedges the render graph silently when hardware
+      formats differ** (USB DAC at 44.1 kHz vs speakers) — audio gone until a
+      rebuild, unrecoverable by switching back. All route changes (manual
+      switch, vanish, return) now rebuild the engine and hard-restart the
+      stream at the playhead (`recoverPlayback`, reusing the seek path) — a
+      sub-second gap, reliable on any hardware.
+    - `AVAudioEngineConfigurationChange` does **not** fire when a *pinned*
+      device vanishes: a `kAudioHardwarePropertyDevices` listener
+      (`AudioDeviceListObserver`) drives vanish-fallback / return-re-pin.
+    - Settings device picker refreshes live on connect/disconnect, shows a
+      "(disconnected)" row (persisted device name) while the choice is absent,
+      and filters Core Audio's transient private aggregates.
+    - Sonicwave never touches the system default — other apps' routing is
+      fully independent (macOS's own Bluetooth default auto-switch is not
+      ours to control).
 
 ## M5 — Playlists CRUD/reorder + Favorites 🚧
 Status: **code-complete, builds clean, full test suite green (incl. new

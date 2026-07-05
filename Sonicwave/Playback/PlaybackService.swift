@@ -65,6 +65,12 @@ actor PlaybackService {
 
     /// Persisted UID of the chosen output device (nil = system default).
     private var outputDeviceUID: String?
+    /// Device the output unit is currently pointed at.
+    private var appliedDeviceID: AudioDeviceID?
+    /// Watches the system device list: `AVAudioEngineConfigurationChange` does
+    /// NOT fire when a *pinned* device vanishes (the output unit just goes
+    /// dead), so device arrivals/departures need their own listener.
+    private var deviceListObserver: AudioDeviceListObserver?
 
     init(client: SubsonicClient) {
         self.client = client
@@ -80,6 +86,17 @@ actor PlaybackService {
             forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil
         ) { [weak self] _ in
             Task { await self?.handleConfigChange() }
+        }
+        // The device-list observer is installed lazily (see startObservingDevices):
+        // actor stored properties can't be written from the nonisolated init.
+    }
+
+    /// Install the device-list listener (idempotent). Called once the engine
+    /// first connects — before that there's nothing to re-route.
+    private func startObservingDevices() {
+        guard deviceListObserver == nil else { return }
+        deviceListObserver = AudioDeviceListObserver { [weak self] in
+            Task { await self?.handleDevicesChanged() }
         }
     }
 
@@ -228,7 +245,16 @@ actor PlaybackService {
     func setOutputDevice(uid: String?) {
         outputDeviceUID = (uid?.isEmpty == false) ? uid : nil
         UserDefaults.standard.set(outputDeviceUID, forKey: "outputDeviceUID")
-        if engineConnected { applyOutputDevice() }
+        guard engineConnected else { return }
+        if hasStartedPlayback {
+            // A live property swap wedges the graph silently when the new
+            // device's hardware format differs (seen with a USB DAC: audio
+            // gone until a full rebuild). Rebuild + restart at the playhead
+            // instead — a sub-second gap, but reliable on every device.
+            recoverPlayback()
+        } else {
+            applyOutputDevice()
+        }
     }
 
     /// Point the engine's output unit at the selected device (or the current
@@ -240,7 +266,11 @@ actor PlaybackService {
         let status = AudioUnitSetProperty(au, kAudioOutputUnitProperty_CurrentDevice,
                                           kAudioUnitScope_Global, 0, &dev,
                                           UInt32(MemoryLayout<AudioDeviceID>.size))
-        if status != noErr { Self.log.error("set output device failed: \(status)") }
+        if status != noErr {
+            Self.log.error("set output device failed: \(status)")
+        } else {
+            appliedDeviceID = dev
+        }
     }
 
     /// Engine I/O config changed (route change / default device / format). Keep
@@ -250,6 +280,46 @@ actor PlaybackService {
         applyOutputDevice()
         if !engine.isRunning { try? engine.start() }
         if hasStartedPlayback, !isPaused, !node.isPlaying { node.play() }
+    }
+
+    /// A device appeared or disappeared. Only Sonicwave's own pinned route is
+    /// touched — the system default (and other apps) are never altered. If the
+    /// pinned device vanished, recover onto the fallback; if it came back (or
+    /// the effective target otherwise changed), re-pin live.
+    private func handleDevicesChanged() {
+        guard engineConnected else { return }
+        let resolved = outputDeviceUID.flatMap { AudioOutputDevices.deviceID(forUID: $0) }
+        let target = resolved ?? AudioOutputDevices.defaultOutputID()
+        guard let target, target != appliedDeviceID else { return }
+        // Whether the pinned device vanished (graph wedged on dead hardware)
+        // or returned (re-pin may cross hardware formats), a live property
+        // swap isn't trustworthy — rebuild and resume at the playhead.
+        Self.log.info("output route target changed; recovering")
+        if hasStartedPlayback {
+            recoverPlayback()
+        } else {
+            applyOutputDevice()
+        }
+    }
+
+    /// Rebuild the route and hard-restart the current track at the playhead —
+    /// the reliable way out of a render graph wedged on vanished hardware
+    /// (reuses the seek path). Keeps the paused state.
+    private func recoverPlayback() {
+        let active = activeSpan()
+        var position = active?.seekBase ?? 0
+        if let active, let sample = currentSampleTime(), sample >= active.startFrame {
+            position = active.seekBase + Double(sample - active.startFrame) / canonicalFormat.sampleRate
+            if active.duration > 0 { position = min(position, active.duration) }
+        }
+        let wasPaused = isPaused
+        engine.stop()
+        applyOutputDevice()
+        try? engine.start()
+        guard let active else { return }
+        play(songId: active.id, suffix: nil, duration: active.duration,
+             index: active.index, from: position)
+        if wasPaused { pause() }
     }
 
     /// Back-pressure: once we're `maxReadAheadFrames` ahead, pause the network
@@ -273,6 +343,7 @@ actor PlaybackService {
             engine.mainMixerNode.outputVolume = volume
             engineConnected = true
             applyOutputDevice()
+            startObservingDevices()
             engine.prepare()
             do { try engine.start() } catch {
                 emit(.failed("Audio engine failed to start: \(error.localizedDescription)"))
