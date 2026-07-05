@@ -12,7 +12,8 @@ struct MenuBarPanel: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ArtworkView(coverArt: player.currentTrack?.coverArt, size: 208, cornerRadius: 10)
+            ArtworkView(coverArt: player.currentTrack?.coverArt, size: 208, cornerRadius: 10,
+                        placeholderSymbol: "waveform")
                 .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
 
             Text(player.currentTrack?.title ?? "Not Playing")

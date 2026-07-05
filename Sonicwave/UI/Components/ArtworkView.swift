@@ -7,13 +7,18 @@ struct ArtworkView: View {
     let coverArt: String?
     var size: CGFloat
     var cornerRadius: CGFloat = 6
+    /// SF Symbol shown while there is no artwork (branding surfaces pass the
+    /// app icon's waveform).
+    var placeholderSymbol: String = "music.note"
 
     @State private var image: NSImage?
 
-    init(coverArt: String?, size: CGFloat, cornerRadius: CGFloat = 6) {
+    init(coverArt: String?, size: CGFloat, cornerRadius: CGFloat = 6,
+         placeholderSymbol: String = "music.note") {
         self.coverArt = coverArt
         self.size = size
         self.cornerRadius = cornerRadius
+        self.placeholderSymbol = placeholderSymbol
         // Seed from any already-cached variant so cached art shows immediately
         // (no placeholder flash when the same art is shown at a different size).
         _image = State(initialValue: ArtworkCache.shared.cachedVariant(coverArt: coverArt))
@@ -36,8 +41,10 @@ struct ArtworkView: View {
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .fill(.quaternary)
                     .overlay {
-                        Image(systemName: "music.note")
-                            .imageScale(.medium)
+                        // Scaled with the view so the glyph reads at hero
+                        // sizes too (fixed imageScale vanished at 200pt+).
+                        Image(systemName: placeholderSymbol)
+                            .font(.system(size: max(12, size * 0.22)))
                             .foregroundStyle(.secondary)
                     }
             }
