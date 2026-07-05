@@ -25,9 +25,24 @@ actor PlaybackService {
     private let client: SubsonicClient
     private let engine = AVAudioEngine()
     private let node = AVAudioPlayerNode()
-    /// Single fixed format for the node connection so tracks play gaplessly.
-    private let canonicalFormat = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 2)!
+    /// Fallback timeline format when rate matching is off.
+    private let baseFormat = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 2)!
+    /// The current timeline's format — one format per gapless timeline so a
+    /// single player node plays tracks back-to-back. With rate matching on,
+    /// each hard start re-derives it from the track's native sample rate;
+    /// followers decode (resampling only if they differ) into this format.
+    private var canonicalFormat = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 2)!
+    /// Format the node is currently connected to the mixer with.
+    private var connectedFormat: AVAudioFormat?
     private var engineConnected = false
+
+    /// "Match hardware sample rate" preference (Settings → Playback); default
+    /// on — the audiophile behavior (Audirvana/Roon-style): the DAC runs at
+    /// the music's native rate, so nothing resamples along the way.
+    private var matchRateEnabled: Bool {
+        UserDefaults.standard.object(forKey: "matchDeviceSampleRate") == nil
+            || UserDefaults.standard.bool(forKey: "matchDeviceSampleRate")
+    }
 
     /// A contiguous region of the node's output timeline belonging to one track.
     private struct TrackSpan {
@@ -115,10 +130,12 @@ actor PlaybackService {
         let gen = generation
         hardReset()
         isPaused = false
+        // With matching off, new timelines return to the fixed base format.
+        if !matchRateEnabled { canonicalFormat = baseFormat }
         emit(.stateChanged(.buffering))
         if time > 0 { emit(.position(time: time, duration: duration)) }
         startDecode(songId: songId, suffix: suffix, duration: duration, index: index,
-                    seekBase: time, gen: gen)
+                    seekBase: time, gen: gen, timelineStart: true)
     }
 
     /// Provide the next track to pre-buffer (reply to `.wantNext`).
@@ -126,7 +143,7 @@ actor PlaybackService {
         guard awaitingNext else { return }
         awaitingNext = false
         startDecode(songId: songId, suffix: suffix, duration: duration, index: index,
-                    seekBase: 0, gen: generation)
+                    seekBase: 0, gen: generation, timelineStart: false)
     }
 
     /// No successor — the current track is the last one.
@@ -169,7 +186,7 @@ actor PlaybackService {
     // MARK: - Decode pipeline
 
     private func startDecode(songId: String, suffix: String?, duration: TimeInterval,
-                             index: Int, seekBase: TimeInterval, gen: Int) {
+                             index: Int, seekBase: TimeInterval, gen: Int, timelineStart: Bool) {
         // Begin a new span starting at the current end of the scheduled timeline.
         let span = TrackSpan(id: songId, index: index, duration: duration, seekBase: seekBase,
                              startFrame: cumulativeFrames, frameCount: 0, decodeComplete: false)
@@ -178,20 +195,21 @@ actor PlaybackService {
 
         decodeTask = Task { [weak self] in
             await self?.runDecode(songId: songId, suffix: suffix, index: index,
-                                  seekBase: seekBase, spanArrayIndex: spanArrayIndex, gen: gen)
+                                  seekBase: seekBase, spanArrayIndex: spanArrayIndex, gen: gen,
+                                  timelineStart: timelineStart)
         }
     }
 
     private func runDecode(songId: String, suffix: String?, index: Int,
-                           seekBase: TimeInterval, spanArrayIndex: Int, gen: Int) async {
+                           seekBase: TimeInterval, spanArrayIndex: Int, gen: Int,
+                           timelineStart: Bool) async {
         let prefs = TranscodePrefs.current()
         // Server-side `timeOffset` only seeks *transcoded* streams; for original
         // files the server ignores it (plays from the start), so we instead decode
         // from 0 and discard output up to the seek point.
         let transcoding = prefs.format != nil
         let serverOffset = (transcoding && seekBase > 0) ? Int(seekBase) : nil
-        let skipFrames = (!transcoding && seekBase > 0)
-            ? AVAudioFramePosition(seekBase * canonicalFormat.sampleRate) : 0
+        let skipSeconds = (!transcoding && seekBase > 0) ? seekBase : 0
 
         let url: URL
         do {
@@ -202,7 +220,20 @@ actor PlaybackService {
             return
         }
 
-        let source = ProgressiveAudioSource(outputFormat: canonicalFormat, skipFrames: skipFrames)
+        // Rate matching: a timeline-starting track decodes at its own native
+        // rate (no resample; schedule() reconfigures the chain when the first
+        // buffer arrives). Followers join the running timeline's format so
+        // gapless scheduling stays on one node.
+        let chooseOutput: (@Sendable (AVAudioFormat) -> AVAudioFormat)? =
+            (timelineStart && matchRateEnabled)
+                ? { @Sendable source in
+                    AVAudioFormat(standardFormatWithSampleRate: source.sampleRate, channels: 2)
+                        ?? source
+                }
+                : nil
+        let source = ProgressiveAudioSource(outputFormat: canonicalFormat,
+                                            skipSeconds: skipSeconds,
+                                            chooseOutput: chooseOutput)
         source.open(fileTypeHint: audioFileTypeHint(forSuffix: suffix))
         let decoded = source.buffers
 
@@ -276,6 +307,27 @@ actor PlaybackService {
             Self.log.error("set output device failed: \(status)")
         } else {
             appliedDeviceID = dev
+            matchDeviceRateIfEnabled()
+        }
+    }
+
+    /// Rate matching: run the output device's hardware clock at the timeline's
+    /// sample rate (closest supported), so macOS doesn't resample on the way
+    /// out. Applied wherever a device is (re)applied, so device switches and
+    /// recoveries keep the match.
+    private func matchDeviceRateIfEnabled() {
+        guard matchRateEnabled, let dev = appliedDeviceID else { return }
+        let target = canonicalFormat.sampleRate
+        guard let best = AudioOutputDevices.bestSupportedRate(for: target, on: dev),
+              let current = AudioOutputDevices.nominalSampleRate(of: dev),
+              abs(current - best) > 0.5 else { return }
+        // The hardware rate switch fires config-change notifications; treat
+        // them as echoes of this deliberate change, not something to recover from.
+        lastRecovery = .now
+        if AudioOutputDevices.setNominalSampleRate(best, on: dev) {
+            Self.log.info("output device sample rate: \(current, privacy: .public) → \(best, privacy: .public) Hz")
+        } else {
+            Self.log.error("failed to set device sample rate \(best, privacy: .public) Hz")
         }
     }
 
@@ -287,6 +339,7 @@ actor PlaybackService {
     /// notifications this recovery provokes from looping.
     private func handleConfigChange() {
         guard engineConnected else { return }
+        Self.log.info("config change (started=\(self.hasStartedPlayback, privacy: .public), engineRunning=\(self.engine.isRunning, privacy: .public), nodePlaying=\(self.node.isPlaying, privacy: .public))")
         if hasStartedPlayback {
             recoverPlayback()
         } else {
@@ -321,7 +374,10 @@ actor PlaybackService {
     /// deliberate switches; unforced calls (config-change notifications)
     /// within a second of a recovery are treated as its echoes and swallowed.
     private func recoverPlayback(force: Bool = false) {
-        if !force, let last = lastRecovery, last.duration(to: .now) < .seconds(1) { return }
+        if !force, let last = lastRecovery, last.duration(to: .now) < .seconds(1) {
+            Self.log.info("config-change echo swallowed")
+            return
+        }
         lastRecovery = .now
         // Prefer the reported span (the node clock may already be dead, and
         // the sample-time fallback would misattribute multi-track timelines).
@@ -336,6 +392,7 @@ actor PlaybackService {
         applyOutputDevice()
         try? engine.start()
         guard let active else { return }
+        Self.log.info("recovering playback (force=\(force, privacy: .public)) at \(position, privacy: .public)s")
         play(songId: active.id, suffix: nil, duration: active.duration,
              index: active.index, from: position)
         if wasPaused { pause() }
@@ -357,8 +414,20 @@ actor PlaybackService {
     private func schedule(_ buffer: AVAudioPCMBuffer, spanArrayIndex: Int, gen: Int) {
         guard gen == generation, spans.indices.contains(spanArrayIndex) else { return }
 
+        // A timeline-starting decode can arrive in a new native rate (rate
+        // matching): adopt it and rebuild the node connection for it.
+        if buffer.format.sampleRate != canonicalFormat.sampleRate {
+            canonicalFormat = buffer.format
+        }
+        if engineConnected, connectedFormat?.sampleRate != canonicalFormat.sampleRate {
+            engine.stop()
+            engine.disconnectNodeOutput(node)
+            engineConnected = false
+        }
+
         if !engineConnected {
             engine.connect(node, to: engine.mainMixerNode, format: canonicalFormat)
+            connectedFormat = canonicalFormat
             engine.mainMixerNode.outputVolume = volume
             engineConnected = true
             applyOutputDevice()
@@ -388,6 +457,8 @@ actor PlaybackService {
     private func startNodePlayback() {
         guard !hasStartedPlayback, !isPaused else { return }
         hasStartedPlayback = true
+        Self.log.info("node playback starting (engineRunning=\(self.engine.isRunning, privacy: .public))")
+        if !engine.isRunning { try? engine.start() }
         node.play()
         beginActivity()
         startPositionUpdates()

@@ -83,6 +83,9 @@ private struct PlaybackSettingsView: View {
     /// Remembered name of the chosen device, so it can be shown while the
     /// device is disconnected (the UID alone is unreadable).
     @AppStorage("outputDeviceName") private var outputDeviceName = ""
+    /// Bit-perfect-style rate matching (PlaybackService reads the same key,
+    /// defaulting to on).
+    @AppStorage("matchDeviceSampleRate") private var matchSampleRate = true
 
     /// The chosen device is currently absent (e.g. Bluetooth disconnected).
     /// Audio falls back to the system default; the choice sticks so it re-pins
@@ -114,6 +117,9 @@ private struct PlaybackSettingsView: View {
                     Text("Playing through the system default until it reconnects.")
                         .font(.callout).foregroundStyle(.secondary)
                 }
+                Toggle("Match hardware sample rate", isOn: $matchSampleRate)
+                Text("Runs the output device at each track's native sample rate, so nothing is resampled on the way to your DAC. Other apps sharing the device may blip when the rate changes.")
+                    .font(.callout).foregroundStyle(.secondary)
             }
             Section("Streaming") {
                 Toggle("Transcode on the server", isOn: $connection.transcodeEnabled)

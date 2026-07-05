@@ -40,15 +40,33 @@ purely to overlap load/schedule of N+1. Decide canonical-format-vs-reconnect in
 the spike.
 
 **Implemented (M4, 2026-06-22):** the spike resolved to the **canonical-format,
-single-node** variant. `PlaybackService` decodes every track to a fixed
-canonical format (44.1 kHz / stereo / float) and schedules consecutive tracks
-back-to-back on **one** `AVAudioPlayerNode` without stopping it — gapless falls
-out of continuous scheduling, and sample-rate changes are absorbed by resampling
-to the canonical format. The second node proved unnecessary because the next
-track is decoded ahead of the play head and its buffers are appended to the same
-node. Pre-buffering uses a pull model (`.wantNext` → `enqueueNext`), and track
+single-node** variant. `PlaybackService` decodes every track to one timeline
+format and schedules consecutive tracks back-to-back on **one**
+`AVAudioPlayerNode` without stopping it — gapless falls out of continuous
+scheduling. The second node proved unnecessary because the next track is
+decoded ahead of the play head and its buffers are appended to the same node.
+Pre-buffering uses a pull model (`.wantNext` → `enqueueNext`), and track
 boundaries are detected from the node's sample-time spans (`.trackChanged`).
-Still pending **device verification** of the audible seam.
+Audible seam human-verified 2026-07-03.
+
+**Hardware sample-rate matching (2026-07-05, Audirvana/Roon-style):** with
+"Match hardware sample rate" on (Settings → Playback, default on), each hard
+start re-derives the timeline format from the track's **native sample rate**
+(the decoder picks its output format at source discovery — no software
+resample), reconnects the node when the rate differs from the current
+connection, and sets the output device's **nominal hardware rate**
+(`kAudioDevicePropertyNominalSampleRate`, closest supported) to match — so
+nothing resamples between file and DAC. Gapless followers join the running
+timeline's format (resampled only if they differ, e.g. a mixed-rate queue).
+The device-rate switch fires config-change notifications; those are treated
+as echoes of the deliberate change (see the recovery echo guard). External
+rate meddling while playing is corrected on the next config change. With
+matching off, timelines return to the fixed 44.1 kHz base format and the
+device's rate is never touched. Verified live against a USB DAC (CXA81,
+44.1k–705.6k): 48 kHz pre-set snapped to 44.1 kHz on play; toggle off left
+an external 48 kHz set untouched. Remaining ideal-world gaps: bit depth
+stays float32 through the mixer (lossless for ≤24-bit sources), and
+exclusive/hog-mode access is not implemented.
 
 ## Streaming decode source ✅ (decision: Option A — progressive decode)
 

@@ -71,6 +71,62 @@ enum AudioOutputDevices {
         all().first { $0.uid == uid }?.id
     }
 
+    // MARK: - Hardware sample rate (bit-perfect rate matching)
+
+    /// The device's current nominal (hardware) sample rate.
+    static func nominalSampleRate(of id: AudioDeviceID) -> Double? {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyNominalSampleRate,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var rate = Double(0)
+        var size = UInt32(MemoryLayout<Double>.size)
+        guard AudioObjectGetPropertyData(id, &addr, 0, nil, &size, &rate) == noErr else { return nil }
+        return rate
+    }
+
+    /// Set the device's nominal sample rate. The switch is asynchronous on the
+    /// hardware side and fires configuration-change notifications.
+    @discardableResult
+    static func setNominalSampleRate(_ rate: Double, on id: AudioDeviceID) -> Bool {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyNominalSampleRate,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var value = rate
+        return AudioObjectSetPropertyData(id, &addr, 0, nil,
+                                          UInt32(MemoryLayout<Double>.size), &value) == noErr
+    }
+
+    /// The closest hardware rate the device supports for `target`: the exact
+    /// rate when available, else the nearest supported one (ties go up).
+    static func bestSupportedRate(for target: Double, on id: AudioDeviceID) -> Double? {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyAvailableNominalSampleRates,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var size: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(id, &addr, 0, nil, &size) == noErr, size > 0 else { return nil }
+        var ranges = [AudioValueRange](repeating: AudioValueRange(),
+                                       count: Int(size) / MemoryLayout<AudioValueRange>.size)
+        guard AudioObjectGetPropertyData(id, &addr, 0, nil, &size, &ranges) == noErr else { return nil }
+
+        var best: Double?
+        for range in ranges {
+            // A continuous range containing the target supports it exactly;
+            // discrete rates arrive as ranges with min == max.
+            if (range.mMinimum...range.mMaximum).contains(target) { return target }
+            for candidate in [range.mMinimum, range.mMaximum] {
+                if best == nil
+                    || abs(candidate - target) < abs(best! - target)
+                    || (abs(candidate - target) == abs(best! - target) && candidate > best!) {
+                    best = candidate
+                }
+            }
+        }
+        return best
+    }
+
     // MARK: - Per-device queries
 
     private static func hasOutput(_ id: AudioDeviceID) -> Bool {

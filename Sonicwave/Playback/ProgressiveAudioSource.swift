@@ -15,19 +15,27 @@ final class ProgressiveAudioSource: AudioStreamSource {
 
     private var streamID: AudioFileStreamID?
     private var sourceFormat: AVAudioFormat?
-    /// Fixed canonical format all tracks decode to, so a single player node can
-    /// play them back-to-back gaplessly (and sample-rate changes are resampled).
-    private let outputFormat: AVAudioFormat
+    /// Format this track decodes to — the timeline's format, so a single player
+    /// node can play tracks back-to-back gaplessly. When `chooseOutput` is set
+    /// (rate matching, timeline starts only) it is re-chosen from the source's
+    /// native rate once discovered.
+    private(set) var outputFormat: AVAudioFormat
+    /// Picks the output format from the discovered source format (nil = keep
+    /// the fixed `outputFormat`).
+    private let chooseOutput: (@Sendable (AVAudioFormat) -> AVAudioFormat)?
     private var converter: AVAudioConverter?
 
     private static let log = Logger(subsystem: "nl.huell.sonicwave", category: "decode")
     private var decodedFrames: AVAudioFramePosition = 0
     private var inputFrames: AVAudioFramePosition = 0
 
-    /// Frames of decoded output to discard from the start. Used to seek on
+    /// Seconds of decoded output to discard from the start. Used to seek on
     /// non-transcoded streams (the server can't offset the original file), by
-    /// decoding from 0 and dropping everything before the seek point.
-    private let skipFrames: AVAudioFramePosition
+    /// decoding from 0 and dropping everything before the seek point. Kept in
+    /// seconds because the output rate may not be known until discovery.
+    private let skipSeconds: TimeInterval
+    /// Frame form of `skipSeconds`, fixed at format discovery.
+    private var skipFrames: AVAudioFramePosition = 0
     private var producedFrames: AVAudioFramePosition = 0
     /// Consolidate the many small per-batch decoder outputs into ~1-second
     /// buffers before yielding. Scheduling thousands of tiny buffers in a burst
@@ -36,9 +44,12 @@ final class ProgressiveAudioSource: AudioStreamSource {
     private let chunkTarget: AVAudioFrameCount = 44_100
     private var accum: AVAudioPCMBuffer?
 
-    init(outputFormat: AVAudioFormat, skipFrames: AVAudioFramePosition = 0) {
+    init(outputFormat: AVAudioFormat, skipSeconds: TimeInterval = 0,
+         chooseOutput: (@Sendable (AVAudioFormat) -> AVAudioFormat)? = nil) {
         self.outputFormat = outputFormat
-        self.skipFrames = skipFrames
+        self.skipSeconds = skipSeconds
+        self.chooseOutput = chooseOutput
+        self.skipFrames = AVAudioFramePosition(skipSeconds * outputFormat.sampleRate)
         let (stream, continuation) = AsyncStream.makeStream(of: SendablePCMBuffer.self)
         self.buffers = stream
         self.continuation = continuation
@@ -179,9 +190,13 @@ final class ProgressiveAudioSource: AudioStreamSource {
         guard let source = AVAudioFormat(streamDescription: &asbd) else { return }
 
         sourceFormat = source
+        if let chooseOutput {
+            outputFormat = chooseOutput(source)
+            skipFrames = AVAudioFramePosition(skipSeconds * outputFormat.sampleRate)
+        }
         converter = AVAudioConverter(from: source, to: outputFormat)
         let isPCM = asbd.mFormatID == kAudioFormatLinearPCM
-        Self.log.debug("source format id=\(asbd.mFormatID) sr=\(asbd.mSampleRate) pcm=\(isPCM) converter=\(self.converter != nil)")
+        Self.log.debug("source format id=\(asbd.mFormatID) sr=\(asbd.mSampleRate) → out sr=\(self.outputFormat.sampleRate) pcm=\(isPCM) converter=\(self.converter != nil)")
     }
 
     private func handlePackets(numberBytes: UInt32, numberPackets: UInt32,
