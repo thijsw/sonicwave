@@ -31,7 +31,8 @@ struct SonicwaveApp: App {
                 .environment(app.connection)
         }
 
-        MenuBarExtra("Sonicwave", systemImage: "music.note") {
+        // The waveform mirrors the app icon's glyph.
+        MenuBarExtra("Sonicwave", systemImage: "waveform") {
             MenuBarPanel()
                 .environment(app)
                 .environment(app.player)
