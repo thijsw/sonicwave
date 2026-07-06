@@ -63,14 +63,12 @@ Notes:
 ## Pagination & lazy loading ✅
 
 - Library lists (`getAlbumList2`, `getSongsByGenre`, `search3`) fetch in pages
-  (size ~100–200) and persist pages into SwiftData.
-- Views read from the store and trigger the next page near the scroll end.
-- `LibrarySyncState` tracks the next offset and whether a list is exhausted, so
-  pagination logic lives in one place (`LibraryStore`).
-- Refresh policy: revalidate a list when it's older than a threshold or on
-  explicit pull/refresh; reconcile by upsert + prune of removed ids.
+  and accumulate **in-memory** in `LibraryModel`.
+- Views trigger the next page near the scroll end (trailing sentinel row).
+- `LibraryModel` owns the offset bookkeeping and exhaustion detection; state
+  is refetched per session (network-required by design).
 
-## Artwork cache ✅
+## Artwork cache — original design notes ✅
 
 `ArtworkCache` (an actor or `@MainActor` cache) — decode once, reuse resized
 variants:
@@ -96,17 +94,16 @@ variants:
   next track is pre-buffered (see `03`).
 - **Release aggressively:** completed PCM buffers and finished-track temp files
   are freed immediately; artwork is bounded and purgeable.
-- **Paginate:** never hold an entire large library's rows in memory; rely on
-  `Table` virtualization + paged store reads.
+- **Paginate:** never fetch an entire large library up front; rely on table
+  virtualization + paged fetches.
 - **Right-size images:** request server-resized artwork; cache by exact target
   size; downscale on decode.
-- **Bounded caches:** cost-limited `NSCache`; SwiftData fetches are paged, not
-  whole-table.
+- **Bounded caches:** count-bounded `NSCache` for artwork; paged library
+  fetches.
 
 ## Threading ✅
 
-- SwiftData `ModelContext` work on the main actor (its objects are
-  main-actor-bound); heavy decode/transform off-main, then hand `Sendable`
-  values back to update the store/UI.
+- Models are `@MainActor`; network fetches and decoding run off-main and hand
+  `Sendable` values back.
 - Artwork fetch/decode off the main thread; publish the finished `NSImage` to
   the main actor.

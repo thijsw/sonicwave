@@ -5,17 +5,21 @@ shippable-internally increment. The hardest item — streaming gapless via
 `AVAudioEngine` — is isolated as a spike (M4) and de-risked by landing simpler
 playback first (M3).
 
-> **Live status:** M0 ✅ · M1 ✅ · M2 🚧 (UI/data in-memory; SwiftData cache
-> pending) · M3 🚧 (code-complete & tested; runtime audio unverified) ·
-> M4 🚧 (gapless + queue + column browser code-complete & tested; gapless seam
-> needs device verification). See `PROGRESS.md` for the detailed build log.
+> **Live status:** M0–M6 ✅ (M2's SwiftData cache was dropped by design;
+> gapless human-verified 2026-07-03; playlist reorder verified vs Navidrome;
+> output-device switching human-verified vs a USB DAC 2026-07-05, incl.
+> hardware sample-rate matching) · M7 🚧 (media keys, section restoration,
+> a11y labels done; deeper VoiceOver sweep, sort/scroll restoration,
+> volume/star shortcuts remain) · M8 ⏳ not started. See `PROGRESS.md` for
+> the detailed build log.
 
 ## M0 — Foundation ✅
 - Create the Xcode app project (macOS 15 deployment, Swift 6 language mode,
   Xcode 26 SDK), folder groups per `01`, unit-test + UI-test targets.
 - App Sandbox + `network.client` entitlement; Hardened Runtime; Info.plist
   (min macOS 15, music category, versioning, icon placeholder) — `07`.
-- Settings scene skeleton + `AuthStore` (Keychain) — `02`/`07`.
+- Settings scene skeleton + Keychain credential store (shipped as
+  `CredentialStore`) — `02`/`07`.
 - App scenes wired: `WindowGroup`, `Settings`, `MenuBarExtra` (empty), shared
   `@Observable` models in the environment — `01`/`04`.
 - **Exit:** app launches, builds against macOS 15 SDK, opens an empty shell +
@@ -30,15 +34,15 @@ playback first (M3).
 - **Exit:** Test Connection succeeds against a Navidrome server; auth failures
   surface a clear re-auth path.
 
-## M2 — Library browse 🚧
-- `LibraryStore` (SwiftData) + paginated fetch for Albums/Artists/Songs/Genres
-  — `05`/`02`.
+## M2 — Library browse ✅ (SwiftData cache dropped by design)
+- Paginated fetch for Albums/Artists/Songs/Genres (the planned SwiftData
+  `LibraryStore` was dropped — in-memory `LibraryModel` instead) — `05`/`02`.
 - Sidebar (Library group), dense sortable `Table`, basic now-playing header
   (non-functional transport), artwork thumbnails via `ArtworkCache` — `04`/`05`.
 - **Exit:** browse a large library smoothly with pagination; sort columns;
   scroll stays fluid; memory bounded.
 
-## M3 — Single-track playback + system integration 🚧
+## M3 — Single-track playback + system integration ✅
 - `PlaybackService` + `AVAudioEngine` graph playing **one track** (Option A
   progressive decode — committed decision) — `03`.
 - `PlayerModel` intent (play/pause/seek), throttled position, now-playing header
@@ -48,30 +52,32 @@ playback first (M3).
 - **Exit:** play/pause/seek a track; Now Playing widget + media keys work;
   artwork + elapsed time correct.
 
-## M4 — Gapless + queue + column browser 🚧 (highest risk)
-- **Spike:** streaming **gapless** with dual player nodes + pre-buffering on the
-  committed Option A progressive-decode pipeline; also harden Option A's known
-  rough edges (magic cookie, seek accuracy) — `03`. Meet the M4 spike checklist.
+## M4 — Gapless + queue + column browser ✅ (was highest risk)
+- **Spike:** streaming **gapless** + pre-buffering on the committed Option A
+  progressive-decode pipeline (the planned dual player nodes resolved to a
+  single node + canonical timeline format — `03`); also harden Option A's
+  known rough edges (seek accuracy done; magic cookie documented as a
+  limitation). Meet the M4 spike checklist.
 - Up Next / queue (reorder, remove, play-from-here) — `04`.
 - Column browser (Genre → Artist → Album) — `04`.
 - **Exit:** gapless verified on a gapless album; sample-rate change handled;
   queue editing updates pre-buffer target; column browser filters the table.
 
-## M5 — Playlists & favorites
+## M5 — Playlists & favorites ✅
 - Playlists CRUD + **reorder** (`createPlaylist`/`updatePlaylist`/
   `deletePlaylist`); drag rows to playlists — `02`/`04`.
 - Favorites: `getStarred2`, `star`/`unstar`, Favorites sidebar item, ★ column.
 - **Exit:** full playlist lifecycle round-trips to the server; starring works
   everywhere.
 
-## M6 — MenuBarExtra, search, output device
+## M6 — MenuBarExtra, search, output device ✅
 - `MenuBarExtra` `.window` Now Playing panel sharing `PlayerModel` — `04`.
 - Global search (`search3`) with debounce/cancellation — `02`/`04`.
 - Output-device enumeration/selection + route-change handling — `03`.
 - **Exit:** menu-bar panel controls playback with main window closed; search is
   responsive; device switching is robust.
 
-## M7 — Polish: accessibility, restoration, transcoding, appearance
+## M7 — Polish: accessibility, restoration, transcoding, appearance 🚧
 - Accessibility pass (VoiceOver, Dynamic Type, contrast, keyboard nav) — `04`.
 - State restoration (windows/selection/sort/scroll) — `06`.
 - Transcoding settings (format/bitrate) wired to `stream` — `02`.
@@ -79,7 +85,7 @@ playback first (M3).
   `04`.
 - **Exit:** manual verification checklist in `08` passes.
 
-## M8 — Distribution
+## M8 — Distribution ⏳
 - App icon, App Privacy details, reviewer notes/demo credentials — `07`.
 - MAS signing/notarization pipeline; (optional) Developer ID build.
 - Full unit + UI test pass on macOS 15 / Xcode 26 CI — `08`.

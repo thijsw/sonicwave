@@ -49,15 +49,15 @@ via a `NowPlayingCenter` service so system state can never disagree with the UI.
   audio to server items (by metadata) for enqueue; otherwise show an
   unsupported affordance. Full local-file playback is a post-v1 item.
 
-## Window model & state restoration ✅
+## Window model & state restoration 🚧
 
-- Adopt SwiftUI scene restoration so windows reopen where the user left them.
-- Persist and restore per-window UI state: selected sidebar item, column-browser
-  selections, table sort + visible columns, scroll position, Up Next
-  visibility. Use `@SceneStorage`/`@AppStorage` for lightweight pieces and the
-  store for heavier selections.
-- Support full-screen and Stage Manager (mostly free with standard scenes;
-  verify layout at small/large sizes).
+- SwiftUI scene restoration reopens windows where the user left them.
+- Implemented: selected sidebar section, Now Playing panel visibility, and
+  column-browser visibility persist via `@AppStorage` (app-wide on purpose —
+  restores even when the system's window-restoration setting is off).
+- Not yet persisted: column-browser selections, table sort/visible columns,
+  scroll position — tracked under M7 polish.
+- Full-screen and Stage Manager come free with standard scenes.
 
 ## File-system access ✅
 

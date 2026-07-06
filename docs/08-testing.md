@@ -42,22 +42,37 @@ audio hardware.
 - **Artwork cache** (`05`): key-by-id+size, eviction, no full-res reuse for
   thumbnails.
 
-## Mocking approach ✅
+## Mocking approach ✅ (as implemented)
 
-- Protocols at every service boundary: `SubsonicAPI`, `AudioStreamSource`,
-  `PlaybackEngine`, `ArtworkProviding`, `CredentialStore`.
-- A `MockSubsonicAPI` returns fixture-backed responses + injectable errors.
-- A `MockPlaybackEngine` records scheduling/seek/teardown calls for assertions.
-- `URLProtocol`-based stub for any test that must exercise the real
-  `SubsonicClient` over `URLSession` end-to-end without a server.
+- Seams kept deliberately small:
+  - `InMemoryCredentialStore` stands in for the Keychain, so `SubsonicClient`
+    is constructible in tests (URL/auth construction asserted on the built
+    requests — no network).
+  - `PlayerModel` works with **no engine injected**: queue/transport logic is
+    synchronous and engine-independent, and `handle(_:)` is internal so tests
+    drive `PlaybackEvent`s directly (no `MockPlaybackEngine` needed).
+  - `AudioStreamSource` is the decode seam; `DecodeContinuityTests` runs the
+    *real* `ProgressiveAudioSource` against synthesized audio instead of
+    mocking it.
+- **Opt-in live tests** (`LiveDecodeTests`): run against a real OpenSubsonic
+  server only when `SONICWAVE_HOST`/`SONICWAVE_USER`/`SONICWAVE_PASS` are set;
+  skipped otherwise, so no credentials are committed and CI stays hermetic.
 
-## UI tests (XCUITest)
+## Current suite (Swift Testing, 66 tests)
 
-- Smoke flows: configure server (mocked via launch-argument stub), browse a
-  library, play a track, scrub, next/previous, create/reorder a playlist,
-  search.
-- Accessibility: key elements have identifiers/labels; basic VoiceOver-trait
-  presence.
+`AuthTests` · `RequestBuildingTests` · `DecodingTests` · `ConnectionTests` ·
+`PlaylistEndpointTests` · `PlaybackConfigTests` · `PlayerQueueTests` ·
+`QueueEditingTests` · `QualityLabelTests` · `ArtworkCacheTests` ·
+`NowPlayingCenterTests` · `DecodeContinuityTests` · `LiveDecodeTests`
+(opt-in).
+
+## UI tests (XCUITest) ⏳ (target not yet created)
+
+- Planned smoke flows: configure server (mocked via launch-argument stub),
+  browse a library, play a track, scrub, next/previous, create/reorder a
+  playlist, search.
+- Interim: end-to-end flows have been verified by driving the real app
+  (computer-use) against a live Navidrome — see `PROGRESS.md`.
 
 ## Manual verification checklist (hardware-dependent)
 

@@ -13,8 +13,11 @@ workflow.)
   for server/auth/transcoding contents.
 - **MenuBarExtra** — Now Playing panel scene (below).
 - Support multiple windows, resizing, full-screen, Stage Manager, and
-  **state restoration** (windows reopen where left; selected sidebar item,
-  sort, column-browser selection, and scroll position restored). See `06`.
+  **state restoration**. Implemented: selected sidebar section, Now Playing
+  panel visibility, and column-browser visibility persist via `@AppStorage`
+  (deliberately app-wide, so they restore regardless of the system's
+  window-restoration setting). Sort, column-browser *selections*, and scroll
+  position are not persisted — tracked under M7 polish. See `06`.
 
 ## Layout ✅
 
@@ -149,19 +152,19 @@ selectable lists; selections are part of restorable view state. Toggleable
   section and clears the query).
 - ⌘F focuses search.
 
-## Menus & keyboard shortcuts ✅
+## Menus & keyboard shortcuts ✅ (as implemented)
 
-Full menu bar via `Commands`; nothing important button-only:
+Menu bar via `Commands` (`SonicwaveCommands`):
 
-- **File:** New Playlist (⌘N), Close (⌘W).
-- **Edit:** standard ⌘C/⌘V, Find (⌘F).
-- **Controls:** Play/Pause (Space), Next (⌘→), Previous (⌘←), Increase/Decrease
-  Volume, Shuffle, Repeat, Star (⌘L or similar).
-- **View:** Show/Hide Column Browser, Show/Hide Up Next, sidebar toggle, column
-  visibility, sort.
-- **Window / Help:** standard.
-
-Standard editing/window shortcuts (⌘C/⌘S/⌘W) behave as users expect.
+- **Controls:** Play/Pause (Space), Next (⌘→), Previous (⌘←), Repeat
+  (Off/All/One picker), Shuffle toggle — disabled when nothing is loaded.
+- **View:** Show Now Playing (⌘U, disabled when nothing plays/queued), Show
+  Column Browser (⌥⌘B), plus the standard sidebar toggle.
+- **Find:** ⌘F focuses the sidebar search field (a hidden button —
+  `.searchable` has no command-level focus hook).
+- **File / Edit / Window / Help:** system defaults. New Playlist lives in the
+  sidebar's **+** button and the track context menu (no ⌘N command); volume
+  and star shortcuts are not bound — deferred to M7 polish.
 
 ## Liquid Glass & appearance ✅
 
@@ -174,9 +177,10 @@ Standard editing/window shortcuts (⌘C/⌘S/⌘W) behave as users expect.
 - Respect Light/Dark automatically; no hardcoded colors — use semantic/system
   colors and materials.
 
-## Accessibility (from the start) ✅
+## Accessibility 🚧 (labels done; deeper sweep deferred)
 
-- Full **VoiceOver** labels/traits on transport, rows, scrubber, artwork.
+- **VoiceOver** labels on icon-only controls are in place; a deeper
+  VoiceOver/traits sweep is the remaining M7 item.
 - **Dynamic Type**: use text styles, avoid fixed font sizes; verify table/
   header reflow.
 - **Increased contrast** and **reduce transparency/motion** honored (don't

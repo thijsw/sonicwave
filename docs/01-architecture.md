@@ -16,28 +16,28 @@
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  UI  (SwiftUI views, @MainActor)                             │
-│  ContentView · Sidebar · TrackTable · ColumnBrowser ·        │
-│  NowPlayingHeader · UpNextView · MenuBarExtra panel ·        │
-│  SettingsView · SearchView                                    │
+│  RootView · SidebarView · TrackTableView/MusicTrackTable ·   │
+│  ColumnBrowserView · NowPlayingToolbar · NowPlayingPanel ·   │
+│  MenuBarPanel · SettingsView · SearchResultsView             │
 └───────────────▲─────────────────────────────────────────────┘
                 │ observes (@Observable)
 ┌───────────────┴─────────────────────────────────────────────┐
 │  App State / ViewModels  (@MainActor, @Observable)           │
-│  AppModel · PlayerModel · LibraryModel · PlaylistsModel ·    │
-│  SearchModel · ConnectionModel                               │
+│  AppModel · PlayerModel · LibraryModel · ConnectionModel ·   │
+│  Navigator                                                   │
 └───────────────▲─────────────────────────────────────────────┘
                 │ async calls
 ┌───────────────┴─────────────────────────────────────────────┐
 │  Services  (actors / isolated)                               │
 │  SubsonicClient (actor) · PlaybackService (actor) ·          │
-│  LibraryStore (SwiftData) · ArtworkCache · AuthStore         │
-│  (Keychain) · NowPlayingCenter · OutputDeviceService         │
+│  ArtworkCache · CredentialStore (Keychain) ·                 │
+│  NowPlayingCenter · AudioOutputDevices (Core Audio)          │
 └───────────────▲─────────────────────────────────────────────┘
                 │
 ┌───────────────┴─────────────────────────────────────────────┐
 │  System / IO                                                 │
 │  URLSession · AVAudioEngine · MediaPlayer · Keychain ·       │
-│  Core Audio · SwiftData store                                │
+│  Core Audio                                                  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -50,11 +50,11 @@ A single `@MainActor @Observable final class PlayerModel` is the source of
 truth for everything "now playing":
 
 - `currentTrack: Song?`, `queue: [Song]` (Up Next), `history: [Song]`
-- `playbackState: PlaybackState` (`.stopped`, `.buffering`, `.playing`,
-  `.paused`)
+- `state: PlaybackState` (`.stopped`, `.buffering`, `.playing`, `.paused`)
 - `position: TimeInterval`, `duration: TimeInterval` (position throttled — see
   `03`)
-- `repeatMode`, `shuffle`, `volume`, `outputDeviceID`
+- `repeatMode`, `shuffle`, `volume` (the output device lives in Settings /
+  `PlaybackService`, persisted by UID via `@AppStorage`)
 
 Why central: the `MenuBarExtra` panel, the main window's header, multiple
 library windows, the `MPNowPlayingInfoCenter`, and `MPRemoteCommandCenter`
@@ -69,20 +69,25 @@ metadata can never disagree with the UI.
 
 - **`SubsonicClient` (actor)** — all OpenSubsonic HTTP. Builds authed
   requests, decodes `Codable` models, maps errors. See `02`.
-- **`PlaybackService` (actor)** — owns `AVAudioEngine`, the two player nodes,
-  the streaming decode pipeline, gapless scheduling, and a position publisher.
-  Exposes async intent methods and an `AsyncStream`/callback of state +
-  position back to `PlayerModel`. See `03`.
-- **`LibraryStore`** — SwiftData-backed metadata cache (albums/artists/songs/
-  genres/playlists/starred) with pagination. See `05`.
-- **`ArtworkCache`** — fetch-once, resized, memory-bounded image cache. See
-  `05`.
-- **`AuthStore`** — Keychain read/write of server URL, username, password (for
-  token+salt) or API key. See `02`/`07`.
+- **`PlaybackService` (actor)** — owns `AVAudioEngine` and a single player
+  node, the streaming decode pipeline, gapless scheduling, output-device
+  routing/recovery, and a throttled position publisher. Exposes async intent
+  methods and an `AsyncStream<PlaybackEvent>` back to `PlayerModel`. See `03`.
+- **`LibraryModel`** — in-memory library state (albums/artists/songs/genres/
+  playlists/starred), fetched per session with pagination. The planned
+  SwiftData `LibraryStore` was dropped — the app is network-required by
+  design. See `05`.
+- **`ArtworkCache`** — two-tier (memory + disk), server-scoped, resized image
+  cache. See `05`.
+- **`CredentialStore`** — Keychain read/write of server URL, username, and
+  password (token+salt) or API key; an in-memory variant backs tests/previews.
+  See `02`/`07`.
 - **`NowPlayingCenter`** — wraps `MPNowPlayingInfoCenter` /
   `MPRemoteCommandCenter`. See `06`.
-- **`OutputDeviceService`** — enumerate Core Audio output devices, observe
-  route changes, set engine output. See `03`.
+- **`AudioOutputDevices`** (+ `AudioDeviceListObserver`) — Core Audio output
+  device enumeration, UID↔id resolution, nominal-sample-rate control, and
+  device-list change observation; `PlaybackService` applies the routing. See
+  `03`.
 
 ## Concurrency model (Swift 6 strict) ✅
 
@@ -112,25 +117,29 @@ struct's `body` (`WindowGroup`, `Settings`, `MenuBarExtra` scenes).
 - Optionals over sentinels; avoid force-unwraps outside genuinely guaranteed
   cases.
 
-## Module / target structure (described, not scaffolded)
+## Module / target structure
 
-Single app target for v1 plus a unit-test target. Folder groups inside the app
-target:
+Single app target for v1 plus a unit-test target (an XCUITest target is
+planned but not yet created). Folder groups inside the app target (Xcode 16+
+synchronized groups — new files are picked up automatically):
 
 ```
 Sonicwave/
-  App/            App entry, scenes, commands (menu bar), environment wiring
-  Models/         PlayerModel, LibraryModel, … (@Observable) + value types
-  Services/       SubsonicClient, PlaybackService, LibraryStore, ArtworkCache,
-                  AuthStore, NowPlayingCenter, OutputDeviceService
-  Networking/     Request builder, endpoint enum, DTOs, error mapping
-  Playback/       Engine graph, streaming source, gapless scheduler
-  Persistence/    SwiftData models + schema
+  App/            SonicwaveApp (scenes), AppModel (composition root),
+                  SonicwaveCommands (menu bar)
+  Models/         PlayerModel, LibraryModel, ConnectionModel, PlaybackTypes
+  Networking/     Endpoint map, DTOs (SubsonicModels), envelope
+                  (SubsonicResponse), SubsonicError
+  Playback/       PlaybackService, ProgressiveAudioSource, DataStreamLoader,
+                  AudioStreamSource (protocol), AudioOutputDevices,
+                  PlaybackEvent
+  Services/       SubsonicClient, CredentialStore, ArtworkCache,
+                  NowPlayingCenter
   UI/
-    Sidebar/  Library/  Playlists/  NowPlaying/  Search/  Settings/  MenuBar/
-  Resources/      Assets, Info.plist, entitlements
-SonicwaveTests/   Swift Testing units (+ fixtures)
-SonicwaveUITests/ XCUITest target
+    Components/  Library/  MenuBar/  NowPlaying/  Search/  Settings/  Sidebar/
+    (+ RootView, Navigator at the top level)
+  Resources/      Assets, entitlements
+SonicwaveTests/   Swift Testing units (incl. opt-in live-server tests)
 ```
 
 Keep the audio/Core Audio bridging thin and contained (most is pure Swift; only

@@ -10,8 +10,8 @@ References to consult during implementation:
 
 ## Authentication ✅
 
-Two modes; chosen automatically based on server capability + user choice in
-Settings:
+Two modes; the user picks the method in Settings (a Method picker —
+capability-based auto-selection was not needed):
 
 1. **Standard Subsonic token+salt** (always available)
    - Generate a random `salt` per request (or per session) and
@@ -26,30 +26,36 @@ Settings:
 Common params on every request: `v` (protocol version we target, e.g.
 `1.16.1`), `c=Sonicwave` (client name), `f=json` (JSON responses).
 
-Credentials live in the **Keychain** (`AuthStore`): server base URL, username,
-and either password or API key. The connection is configured in the native
-Settings window with a **Test Connection** button that calls `ping`.
+Credentials live in the **Keychain** (`CredentialStore`; an in-memory variant
+backs tests/previews): server base URL, username, and either password or API
+key. The connection is configured in the native Settings window with a
+**Test Connection** button that calls `ping`. `ConnectionModel` normalizes
+pasted addresses (strips the `/app` SPA suffix, trailing slash/query/fragment;
+assumes `https://` when the scheme is omitted).
 
-## Capability detection 🔶
+## Capability detection ✅ (as implemented)
 
-On connect, call `getOpenSubsonicExtensions` (and inspect the
-`openSubsonic`/`serverVersion`/`type` fields on the `ping`/responses) to learn:
-- whether API-key auth is supported,
-- which optional extensions exist (e.g. `formPost`, transcode offsets,
-  song lyrics — informational for v1).
-
-Fall back to token+salt and classic behavior when an extension is absent.
+`ping` surfaces the capability fields (`openSubsonic`, `serverVersion`,
+`type`) via `ServerInfo`, which `ConnectionModel` keeps on the connected
+state. A `getOpenSubsonicExtensions` endpoint + response body exist (used by
+the live-server tests) but the app doesn't branch on extensions at runtime —
+the auth method is user-chosen and `timeOffset` seeking is handled by the
+transcode-aware seek path in `03`.
 
 ## Networking client ✅
 
 `actor SubsonicClient` over `URLSession`:
 
-- `func request<T: Decodable>(_ endpoint: Endpoint) async throws(SubsonicError) -> T`
-- A `RequestBuilder` composes base URL + endpoint path (`/rest/<method>`) +
+- `func send<Body: Decodable & Sendable>(_ endpoint: Endpoint, as: Body.Type)
+  async throws(SubsonicError) -> Body` — performs the call and unwraps the
+  decoded body.
+- The client composes base URL + endpoint path (`/rest/<method>.view`) +
   common params + auth params + endpoint params. URL-encode everything.
-- One configured `URLSession` (ephemeral or default, no disk cache for API
-  JSON; artwork/stream handled separately).
-- Decoding off the main actor; map to `Sendable` value types before returning.
+- `streamURL(songId:format:maxBitRate:timeOffset:)` and
+  `coverArtURL(id:size:)` build authed media URLs for the player/artwork
+  cache.
+- One configured `URLSession`; decoding off the main actor; `Sendable` value
+  types returned.
 - Respect cancellation (`Task` cancellation → cancels the data task) for
   search-as-you-type and view teardown.
 
@@ -65,8 +71,9 @@ Grouped by feature. All are `GET` on `/rest/<method>`.
 
 ### Connection
 - `ping` — connection/auth test.
-- `getOpenSubsonicExtensions` — capability detection.
-- `getMusicFolders` — top-level folders (used to scope library queries).
+- `getOpenSubsonicExtensions` — capability probe (defined; exercised by the
+  live tests, not consulted at runtime).
+- ~~`getMusicFolders`~~ — not needed; the app queries the whole library.
 
 ### Library browse
 - `getAlbumList2` — albums, with `type` (`alphabeticalByName`, `newest`,
@@ -76,7 +83,9 @@ Grouped by feature. All are `GET` on `/rest/<method>`.
 - `getAlbum` — one album's songs.
 - `getGenres` — genre list (with counts).
 - `getSongsByGenre` — songs in a genre, with `count`/`offset` → pagination.
-- `getSong` — single song metadata (detail/refresh).
+- `getRandomSongs` — backs the Songs view (Subsonic has no "all songs"
+  endpoint; a fuller aggregation is a tracked deferral).
+- ~~`getSong`~~ — not needed so far (list payloads carry full song metadata).
 
 ### Favorites / starred
 - `getStarred2` — starred artists/albums/songs.
@@ -89,10 +98,11 @@ Grouped by feature. All are `GET` on `/rest/<method>`.
 ### Playlists
 - `getPlaylists` — the user's playlists.
 - `getPlaylist` — one playlist's entries (ordered).
-- `createPlaylist` — name + songId list (or from existing playlist).
-- `updatePlaylist` — rename, add/remove songs, **reorder** via
-  `songIndexToRemove` + re-adds (see `04` for the reorder strategy), comment,
-  public flag.
+- `createPlaylist` — name + songId list; also takes a `playlistId` to
+  **replace** an existing playlist's contents — the canonical Subsonic
+  reorder mechanism (`updatePlaylist` can only append).
+- `updatePlaylist` — rename, add songs (`songIdToAdd`), remove by index
+  (`songIndexToRemove`), comment, public flag.
 - `deletePlaylist` — by `id`.
 
 ### Streaming & artwork
@@ -138,12 +148,11 @@ empty-state UI; transport errors to a retry affordance.
 
 ## Pagination strategy ✅
 
-- Page size constant (e.g. 100–200) for `getAlbumList2`, `getSongsByGenre`,
-  `search3`.
+- Page size constant for `getAlbumList2`, `getSongsByGenre`, `search3`.
 - Library views request the next page when the user scrolls near the end
-  (`onAppear` of a trailing sentinel row, or `Table` scroll position).
-- Persist fetched pages into `LibraryStore` (SwiftData) so re-entry is instant
-  and offset bookkeeping is centralized (see `05`).
+  (`onAppear` of a trailing sentinel row).
+- Fetched pages accumulate **in-memory** in `LibraryModel`, which owns the
+  offset bookkeeping (the SwiftData store was dropped — see `05`).
 
 ## Transcoding setting → `stream` params ✅
 

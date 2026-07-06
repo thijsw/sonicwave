@@ -24,16 +24,18 @@ milestone first. See `10-roadmap.md` for the full milestone plan.
 M0 ✅ · M1 ✅ (auth/endpoints live-verified vs Navidrome 0.62) ·
 M2 ✅ (UI/data live-verified; SwiftData cache dropped — network-required by
 design; artwork cached on disk) ·
-M3 🚧 (decode pipeline live-verified; audio *output* needs a human) ·
-M4 🚧 (gapless code-complete & decode-verified; audible seam needs a human) ·
-M5 🚧 (playlist CRUD/reorder + favorites code-complete & builds/tests green;
-needs a live server to confirm reorder-by-replace) ·
-M6 🚧 (MenuBarExtra panel + search debounce verified; output-device selection
-live-verified for enumerate/select/persist/play — multi-device switching &
-route-change need device testing) ·
+M3 ✅ (playback live-verified end-to-end; seek + Now Playing/media keys work) ·
+M4 ✅ (gapless human-confirmed seamless 2026-07-03; only a cross-sample-rate
+transition remains untested — needs mixed-rate tracks in the library) ·
+M5 ✅ (playlist CRUD + reorder-by-replace verified vs Navidrome 0.62
+2026-07-03; favorites persist) ·
+M6 ✅ (MenuBarExtra panel + search verified; output-device switching,
+vanish-fallback and re-pin human-verified vs a USB DAC 2026-07-05) ·
 M7 🚧 (media keys hardened; last-section restoration verified; accessibility
 labels on icon-only controls; appearance polish — selected-row contrast, default
-window size, empty-Songs fix — done. Only a deeper VoiceOver sweep deferred)
+window size, empty-Songs fix — done. Remaining: deeper VoiceOver sweep,
+sort/scroll restoration, volume/star shortcuts) ·
+M8 ⏳ (not started)
 
 ## How to build / test
 ```sh
@@ -44,6 +46,45 @@ xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
 ```
 
 ---
+
+## Tooling — SwiftLint (2026-07-06)
+Status: **done; lint clean, build warnings unchanged, all 66 tests green.**
+- SwiftLint 0.65 installed (Homebrew) with a near-default `.swiftlint.yml`
+  (only idiomatic short names `id/i/x/y/lo/hi` excluded from
+  `identifier_name`). 125 violations fixed to zero.
+- Along the way: `MusicTrackTable`'s cell/row views moved to
+  `TrackTableCells.swift`; `PlaybackState`/`RepeatMode` moved to
+  `Models/PlaybackTypes.swift`; oversized functions split
+  (`viewFor` cell builders, `handlePackets` input helpers, context-menu
+  sections); `PlaybackService`'s 7-param decode functions bundled into a
+  `DecodeRequest`; `PlaybackService`/`PlayerModel` reorganized into same-file
+  extensions per functional area. One justified `file_length` disable stays in
+  `PlaybackService.swift` (splitting the actor would expose its private
+  state). No behavior changes.
+
+## Hardware sample-rate matching (2026-07-05)
+Status: **done & human-verified against a USB DAC (CXA81, 44.1k–705.6k).**
+Audirvana/Roon-style bit-perfect-style output, on by default (Settings →
+Playback → "Match hardware sample rate"); full design in
+`03-playback-engine.md`:
+- Each hard start re-derives the timeline format from the track's **native
+  sample rate** (`ProgressiveAudioSource.chooseOutput` picks the output format
+  at source discovery — no software resample for native-rate tracks), and the
+  node is reconnected when the rate differs from the current connection.
+- The output device's **nominal hardware rate** is set to the closest
+  supported match (`AudioOutputDevices.bestSupportedRate/setNominalSampleRate`),
+  so nothing resamples between file and DAC. Gapless followers join the
+  running timeline's format (resampled only if they differ).
+- Deliberate rate switches fire config-change notifications — swallowed as
+  echoes via the recovery guard. With matching off, timelines return to the
+  fixed 44.1 kHz base format and the device's rate is never touched.
+- Verified live: a 48 kHz pre-set device snapped to 44.1 kHz on play; with the
+  toggle off an external 48 kHz set was left untouched. Remaining ideal-world
+  gaps: bit depth stays float32 through the mixer (lossless for ≤24-bit
+  sources); exclusive/hog-mode access not implemented.
+- Same pass: the menu-bar icon now matches the app icon's waveform glyph, and
+  `ArtworkView` gained a `placeholderSymbol` (menu-bar panel shows the
+  waveform, glyph scales with view size).
 
 ## UI overhaul — Cadence design pass (2026-07-02/03)
 Status: **done & live-verified (computer-use driving the real app).** The
@@ -80,10 +121,9 @@ for anything the older sections below describe differently:
   (stale across a hard restart) are ignored rather than advanced into.
   `handle(_:)` is internal so tests drive engine events directly (3 tests).
 
-## M6 — MenuBarExtra, search, output device 🚧
-Status: **code-complete, builds + tests green; output-device selection
-live-verified (single device); multi-device switching/route-change need device
-testing.**
+## M6 — MenuBarExtra, search, output device ✅
+Status: **complete — multi-device switching + route changes human-verified
+2026-07-05 (USB DAC); see the bullets below.**
 - **MenuBarExtra `.window` panel** — `MenuBarPanel` shares the same `PlayerModel`
   as the main window (artwork, scrubber, prev/play-pause/next). Verified live: the
   menu-bar popover reflects and controls the current track independently of the
@@ -128,9 +168,9 @@ testing.**
       fully independent (macOS's own Bluetooth default auto-switch is not
       ours to control).
 
-## M5 — Playlists CRUD/reorder + Favorites 🚧
-Status: **code-complete, builds clean, full test suite green (incl. new
-`PlaylistEndpointTests`); playlist edits need a live server to confirm.**
+## M5 — Playlists CRUD/reorder + Favorites ✅
+Status: **complete — reorder-by-replace + add/remove verified against
+Navidrome 0.62 (2026-07-03; see "Remaining for M5" below).**
 - **Endpoint** — `createPlaylist` extended with an optional `playlistId` so it
   can *replace* a playlist's contents (the canonical Subsonic reorder
   mechanism, since `updatePlaylist` can only append).
@@ -270,9 +310,9 @@ Status: **complete, builds clean, 18 unit tests passing.**
   both methods, transcoding params, envelope/model/date decoding, failed-status
   → error, queue/transport logic.
 
-## M4 — Gapless + queue + column browser 🚧
-Status: **code-complete & builds clean (tests green); gapless transitions need
-device verification** (no server/audio device here).
+## M4 — Gapless + queue + column browser ✅
+Status: **complete — gapless human-confirmed seamless 2026-07-03** (see
+"Remaining for M4" below for the verification details).
 - **Gapless engine** — `PlaybackService` reworked to decode **every track to one
   canonical format** (44.1 kHz/stereo float) and schedule consecutive tracks
   back-to-back on a single `AVAudioPlayerNode` (no stop between tracks), so
@@ -312,10 +352,10 @@ device verification** (no server/audio device here).
 - 🔬 Magic-cookie formats (AAC-in-MP4) — `AVAudioConverter` has no cookie API;
   ADTS/MP3/FLAC are fine; documented limitation in `03-playback-engine.md`.
 
-## M3 — Single-track playback + system integration 🚧
-Status: **code-complete & builds clean (25 unit tests pass); runtime audio not
-yet verified** (needs a live Navidrome server + audio device — unavailable in
-this headless env).
+## M3 — Single-track playback + system integration ✅
+Status: **complete — playback verified end-to-end on device** (audio plays
+from Navidrome, seek verified, media keys hardened during M7 work; see
+"Audible playback" below for the crackle/seek forensics).
 - **Decision:** Option A (progressive decode) is the committed streaming source
   (see `03-playback-engine.md`). Option B kept as fallback.
 - `Playback/PlaybackService.swift` — actor owning `AVAudioEngine` + one
@@ -380,16 +420,19 @@ Status: **UI + data flow working in-memory; SwiftData cache not yet wired.**
 - ⏳ **Songs view uses `getRandomSongs`** (Subsonic has no "all songs"
   endpoint). Tracked for a fuller aggregation later (see
   `05-data-and-caching.md`).
-- 🔬 **Playback is stubbed** — `PlayerModel` manages queue/transport state but
-  no audio engine yet. Real `AVAudioEngine` streaming + gapless is M3/M4
-  (`03-playback-engine.md`), the project's key spike.
+- ✅ ~~Playback is stubbed~~ — superseded: the real `AVAudioEngine` streaming +
+  gapless engine landed in M3/M4 (`03-playback-engine.md`).
 - ⏳ Accessibility pass, state restoration, MAS packaging — per roadmap M7–M8.
   (SwiftData cache dropped; output-device selection delivered in M6; playlist
   editing/reorder + favorites in M5; Now Playing center / media keys in M3.)
 
 ## Verification status
-- ✅ `xcodebuild build` succeeds (Debug, arm64, macOS 15 target), no warnings.
-- ✅ `xcodebuild test` — full suite green (**TEST SUCCEEDED**, 0 failures).
+- ✅ `xcodebuild build` succeeds (Debug, arm64, macOS 15 target). A stable
+  baseline of ~29 compiler warnings exists (Sendable-capture and
+  always-true-cast diagnostics, mostly AppKit/concurrency edges); tracked, not
+  growing (verified against the baseline during the 2026-07-06 lint pass).
+- ✅ `xcodebuild test` — full suite green (**TEST SUCCEEDED**, 66 tests,
+  0 failures).
 
 ### Live verification — 2026-06-22, against Navidrome 0.62.0 (real server)
 Validated the networking + decode path end-to-end (opt-in `LiveDecodeTests`,
@@ -479,7 +522,9 @@ skipped unless `SONICWAVE_HOST/USER/PASS` env vars are set — no secrets commit
   the re-read for self-syncing formats).
 
 ### Still requires a human (audio output / listening)
-- ⏳ Actual sound through an output device (engine → speaker).
-- ⏳ Audible gapless seam on a gapless album; cross-sample-rate transition.
-- ⏳ Now Playing widget + media keys behavior (system UI).
+- ✅ Actual sound through an output device — verified (see "Audible playback").
+- ✅ Audible gapless seam — human-confirmed 2026-07-03 (Abbey Road medley).
+- ⏳ Cross-sample-rate transition (44.1↔48 k) — untestable until the library
+  has mixed-rate tracks.
+- ✅ Now Playing widget + media keys — hardened & verified during the M7 pass.
 - App is launchable: `open` the Debug build, then Settings → Connection.

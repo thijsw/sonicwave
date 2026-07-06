@@ -4,9 +4,10 @@ Sonicwave is a native macOS music player for **OpenSubsonic** servers
 (Navidrome as the reference server), written in modern SwiftUI for
 macOS 15 "Sequoia" and later, built with Xcode 26 / Swift 6.2.
 
-This directory is the **design and planning source of truth**. Each document
-is self-contained and detailed enough to implement the subsystem it covers.
-No application code exists yet — these docs define what to build and how.
+This directory is the **design and planning source of truth**, kept in sync
+with the implementation as it lands. Each document is self-contained and
+detailed enough to implement (or understand) the subsystem it covers;
+`PROGRESS.md` is the running record of what's actually built and verified.
 
 ## How to read this set
 
@@ -46,9 +47,13 @@ Used inside docs to flag maturity of a section:
 - **Platform:** SwiftUI, macOS 15+ deployment, Xcode 26 SDK, Swift 6 strict
   concurrency. Liquid Glass adopted automatically on macOS 26 "Tahoe" via
   standard controls/materials; Tahoe-only APIs availability-guarded. ✅
-- **Playback:** `AVAudioEngine` with dual player nodes for sample-accurate
-  gapless. ✅ (decode-from-stream is the key spike 🔬)
-- **Persistence:** SwiftData for metadata cache only (no audio caching). 🔶
+- **Playback:** `AVAudioEngine`, Option A progressive decode, one canonical
+  timeline format on a **single** player node for gapless (the dual-node plan
+  proved unnecessary — see `03`). Hardware sample-rate matching on by
+  default. ✅
+- **Persistence:** none for metadata — the app is network-required by design;
+  library metadata is in-memory per session. Artwork is cached on disk
+  (the SwiftData metadata cache was dropped — see `05`). ✅
 - **State:** Observation (`@Observable`) with one central `PlayerModel`. ✅
 - **Distribution:** Mac App Store, App Sandbox, minimal entitlements. ✅
 - **Dependencies:** First-party Apple frameworks only. ✅
