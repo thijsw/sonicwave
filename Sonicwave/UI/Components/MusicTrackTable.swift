@@ -2,91 +2,6 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-/// An `NSMenuItem` that runs a Swift closure, so context menus can be built inline.
-final class ClosureMenuItem: NSMenuItem {
-    private let handler: () -> Void
-    init(title: String, enabled: Bool = true, handler: @escaping () -> Void) {
-        self.handler = handler
-        super.init(title: title, action: #selector(run), keyEquivalent: "")
-        target = self
-        isEnabled = enabled
-    }
-    @available(*, unavailable)
-    required init(coder: NSCoder) { fatalError("init(coder:) not supported") }
-    @objc private func run() { handler() }
-}
-
-/// Row view that draws a full-width selection in the app's red accent (like
-/// Music), rather than the system accent.
-private final class TrackRowView: NSTableRowView {
-    override func drawSelection(in dirtyRect: NSRect) {
-        guard isSelected else { return }
-        (NSColor(named: "AccentColor") ?? .selectedContentBackgroundColor).setFill()
-        bounds.fill()
-    }
-}
-
-/// Cell for the dimmed secondary columns: `secondaryLabelColor` normally, white
-/// on the selected (emphasized) row so it stays legible on the red highlight —
-/// matching how the managed title cell behaves.
-private final class SecondaryTextCell: NSTableCellView {
-    override var backgroundStyle: NSView.BackgroundStyle {
-        didSet {
-            textField?.textColor = backgroundStyle == .emphasized
-                ? .alternateSelectedControlTextColor
-                : .secondaryLabelColor
-        }
-    }
-}
-
-/// Cell for the Quality column: a small rounded-outline badge ("FLAC",
-/// "320 kbps") — white on the selected (emphasized) row like the other cells.
-private final class QualityBadgeCell: NSTableCellView {
-    private let badge = NSView()
-    private let label = NSTextField(labelWithString: "")
-
-    init(text: String) {
-        super.init(frame: .zero)
-        badge.wantsLayer = true
-        badge.layer?.cornerRadius = 3
-        badge.layer?.borderWidth = 1
-        badge.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(badge)
-
-        label.stringValue = text
-        label.font = .systemFont(ofSize: 9.5, weight: .medium)
-        label.lineBreakMode = .byTruncatingTail
-        label.translatesAutoresizingMaskIntoConstraints = false
-        badge.addSubview(label)
-
-        NSLayoutConstraint.activate([
-            badge.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
-            badge.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -4),
-            badge.centerYAnchor.constraint(equalTo: centerYAnchor),
-            label.leadingAnchor.constraint(equalTo: badge.leadingAnchor, constant: 4),
-            label.trailingAnchor.constraint(equalTo: badge.trailingAnchor, constant: -4),
-            label.topAnchor.constraint(equalTo: badge.topAnchor, constant: 1.5),
-            label.bottomAnchor.constraint(equalTo: badge.bottomAnchor, constant: -1.5),
-        ])
-        applyColors()
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("init(coder:) not supported") }
-
-    override var backgroundStyle: NSView.BackgroundStyle {
-        didSet { applyColors() }
-    }
-
-    private func applyColors() {
-        let emphasized = backgroundStyle == .emphasized
-        label.textColor = emphasized ? .alternateSelectedControlTextColor : .secondaryLabelColor
-        badge.layer?.borderColor = emphasized
-            ? NSColor.alternateSelectedControlTextColor.withAlphaComponent(0.6).cgColor
-            : NSColor.tertiaryLabelColor.cgColor
-    }
-}
-
 /// NSTableView subclass that surfaces a per-row context menu and Return-to-play.
 private final class InnerTableView: NSTableView {
     var contextMenuProvider: ((IndexSet) -> NSMenu?)?
@@ -117,27 +32,40 @@ private final class InnerTableView: NSTableView {
 enum TrackColumn {
     case title, artist, album, genre, quality, time
 
+    struct Widths {
+        let initial: CGFloat
+        let min: CGFloat
+        let max: CGFloat
+    }
+
     var id: String {
         switch self {
-        case .title: "title"; case .artist: "artist"; case .album: "album"
-        case .genre: "genre"; case .quality: "quality"; case .time: "time"
+        case .title: "title"
+        case .artist: "artist"
+        case .album: "album"
+        case .genre: "genre"
+        case .quality: "quality"
+        case .time: "time"
         }
     }
     var header: String {
         switch self {
-        case .title: "Title"; case .artist: "Artist"; case .album: "Album"
-        case .genre: "Genre"; case .quality: "Quality"; case .time: "Time"
+        case .title: "Title"
+        case .artist: "Artist"
+        case .album: "Album"
+        case .genre: "Genre"
+        case .quality: "Quality"
+        case .time: "Time"
         }
     }
-    /// (default, min, max) widths.
-    var widths: (CGFloat, CGFloat, CGFloat) {
+    var widths: Widths {
         switch self {
-        case .title: (240, 120, 10_000)
-        case .artist: (170, 80, 10_000)
-        case .album: (170, 80, 10_000)
-        case .genre: (100, 60, 400)
-        case .quality: (78, 64, 110)
-        case .time: (54, 54, 80)
+        case .title: Widths(initial: 240, min: 120, max: 10_000)
+        case .artist: Widths(initial: 170, min: 80, max: 10_000)
+        case .album: Widths(initial: 170, min: 80, max: 10_000)
+        case .genre: Widths(initial: 100, min: 60, max: 400)
+        case .quality: Widths(initial: 78, min: 64, max: 110)
+        case .time: Widths(initial: 54, min: 54, max: 80)
         }
     }
     var alignRight: Bool { self == .time }
@@ -181,22 +109,22 @@ struct MusicTrackTable: NSViewRepresentable {
 
         func addColumn(_ id: String, _ title: String, width: CGFloat, min: CGFloat, max: CGFloat,
                        sortKey: String? = nil, alignRight: Bool = false) {
-            let c = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(id))
-            c.title = title
-            c.width = width
-            c.minWidth = min
-            c.maxWidth = max
+            let col = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(id))
+            col.title = title
+            col.width = width
+            col.minWidth = min
+            col.maxWidth = max
             // Match the header's alignment to the cell content (e.g. right-aligned Time).
-            (c.headerCell as? NSTableHeaderCell)?.alignment = alignRight ? .right : .left
+            (col.headerCell as? NSTableHeaderCell)?.alignment = alignRight ? .right : .left
             if sortable, let sortKey {
-                c.sortDescriptorPrototype = NSSortDescriptor(key: sortKey, ascending: true)
+                col.sortDescriptorPrototype = NSSortDescriptor(key: sortKey, ascending: true)
             }
-            table.addTableColumn(c)
+            table.addTableColumn(col)
         }
         addColumn("indicator", "", width: 22, min: 22, max: 22)
         for column in columns {
-            let (w, lo, hi) = column.widths
-            addColumn(column.id, column.header, width: w, min: lo, max: hi,
+            let widths = column.widths
+            addColumn(column.id, column.header, width: widths.initial, min: widths.min, max: widths.max,
                       sortKey: column.id, alignRight: column.alignRight)
         }
         addColumn("fav", "", width: 26, min: 26, max: 26)
@@ -257,15 +185,18 @@ struct MusicTrackTable: NSViewRepresentable {
         private func sortedTracks() -> [Song] {
             guard let key = sortKey else { return parent.tracks }
             let asc = ascending
-            return parent.tracks.sorted { a, b in
+            func text(_ lhs: String?, _ rhs: String?) -> Bool {
+                (lhs ?? "").localizedCaseInsensitiveCompare(rhs ?? "") == .orderedAscending
+            }
+            return parent.tracks.sorted { lhs, rhs in
                 let result: Bool
                 switch key {
-                case "artist": result = (a.artist ?? "").localizedCaseInsensitiveCompare(b.artist ?? "") == .orderedAscending
-                case "album": result = (a.album ?? "").localizedCaseInsensitiveCompare(b.album ?? "") == .orderedAscending
-                case "genre": result = (a.displayGenre ?? "").localizedCaseInsensitiveCompare(b.displayGenre ?? "") == .orderedAscending
-                case "quality": result = a.qualityRank < b.qualityRank
-                case "time": result = (a.duration ?? 0) < (b.duration ?? 0)
-                default: result = a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
+                case "artist": result = text(lhs.artist, rhs.artist)
+                case "album": result = text(lhs.album, rhs.album)
+                case "genre": result = text(lhs.displayGenre, rhs.displayGenre)
+                case "quality": result = lhs.qualityRank < rhs.qualityRank
+                case "time": result = (lhs.duration ?? 0) < (rhs.duration ?? 0)
+                default: result = text(lhs.title, rhs.title)
                 }
                 return asc ? result : !result
             }
@@ -278,9 +209,9 @@ struct MusicTrackTable: NSViewRepresentable {
         }
 
         func tableView(_ tableView: NSTableView, sortDescriptorsDidChange oldDescriptors: [NSSortDescriptor]) {
-            if let d = tableView.sortDescriptors.first {
-                sortKey = d.key
-                ascending = d.ascending
+            if let descriptor = tableView.sortDescriptors.first {
+                sortKey = descriptor.key
+                ascending = descriptor.ascending
             } else {
                 sortKey = nil
             }
@@ -307,77 +238,86 @@ struct MusicTrackTable: NSViewRepresentable {
 
             switch id {
             case "indicator":
-                let cell = NSTableCellView()
-                if song.id == parent.nowPlayingID {
-                    let iv = NSImageView()
-                    iv.image = NSImage(systemSymbolName: "speaker.wave.2.fill", accessibilityDescription: "Now playing")
-                    iv.contentTintColor = NSColor(named: "AccentColor")
-                    iv.imageScaling = .scaleProportionallyDown
-                    iv.translatesAutoresizingMaskIntoConstraints = false
-                    cell.addSubview(iv)
-                    NSLayoutConstraint.activate([
-                        iv.centerXAnchor.constraint(equalTo: cell.centerXAnchor),
-                        iv.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-                        iv.widthAnchor.constraint(equalToConstant: 13),
-                        iv.heightAnchor.constraint(equalToConstant: 13),
-                    ])
-                }
-                return cell
-
+                return indicatorCell(for: song)
             case "quality":
                 guard let label = song.qualityLabel else { return NSTableCellView() }
                 return QualityBadgeCell(text: label)
-
             case "fav":
-                let cell = NSTableCellView()
-                let btn = NSButton()
-                btn.isBordered = false
-                btn.imagePosition = .imageOnly
-                btn.image = NSImage(systemSymbolName: parent.isFavorite(song) ? "star.fill" : "star",
-                                    accessibilityDescription: "Favorite")
-                btn.contentTintColor = parent.isFavorite(song) ? .systemYellow : .tertiaryLabelColor
-                btn.tag = row
-                btn.target = self
-                btn.action = #selector(favoriteClicked(_:))
-                btn.translatesAutoresizingMaskIntoConstraints = false
-                cell.addSubview(btn)
-                NSLayoutConstraint.activate([
-                    btn.centerXAnchor.constraint(equalTo: cell.centerXAnchor),
-                    btn.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-                ])
-                return cell
-
+                return favoriteCell(for: song, row: row)
             default:
-                let text: String
-                switch id {
-                case "title": text = song.title
-                case "artist": text = song.artist ?? "—"
-                case "album": text = song.album ?? "—"
-                case "genre": text = song.displayGenre ?? "—"
-                case "time": text = formatTime(song.duration)
-                default: text = ""
-                }
-                let tf = NSTextField(labelWithString: text)
-                tf.lineBreakMode = .byTruncatingTail
-                tf.translatesAutoresizingMaskIntoConstraints = false
-                // Title is the primary label; other columns are dimmed. Assigning
-                // `cell.textField` lets both turn white on the selected row.
-                let cell: NSTableCellView = (id == "title") ? NSTableCellView() : SecondaryTextCell()
-                if id != "title" { tf.textColor = .secondaryLabelColor }
-                cell.textField = tf
-                if id == "time" {
-                    tf.alignment = .right
-                    tf.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-                }
-                cell.addSubview(tf)
-                let trailing = (id == "time") ? -6.0 : -4.0
-                NSLayoutConstraint.activate([
-                    tf.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 4),
-                    tf.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: trailing),
-                    tf.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-                ])
-                return cell
+                return textCell(id: id, song: song)
             }
+        }
+
+        @MainActor private func indicatorCell(for song: Song) -> NSTableCellView {
+            let cell = NSTableCellView()
+            if song.id == parent.nowPlayingID {
+                let icon = NSImageView()
+                icon.image = NSImage(systemSymbolName: "speaker.wave.2.fill", accessibilityDescription: "Now playing")
+                icon.contentTintColor = NSColor(named: "AccentColor")
+                icon.imageScaling = .scaleProportionallyDown
+                icon.translatesAutoresizingMaskIntoConstraints = false
+                cell.addSubview(icon)
+                NSLayoutConstraint.activate([
+                    icon.centerXAnchor.constraint(equalTo: cell.centerXAnchor),
+                    icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+                    icon.widthAnchor.constraint(equalToConstant: 13),
+                    icon.heightAnchor.constraint(equalToConstant: 13)
+                ])
+            }
+            return cell
+        }
+
+        @MainActor private func favoriteCell(for song: Song, row: Int) -> NSTableCellView {
+            let cell = NSTableCellView()
+            let btn = NSButton()
+            btn.isBordered = false
+            btn.imagePosition = .imageOnly
+            btn.image = NSImage(systemSymbolName: parent.isFavorite(song) ? "star.fill" : "star",
+                                accessibilityDescription: "Favorite")
+            btn.contentTintColor = parent.isFavorite(song) ? .systemYellow : .tertiaryLabelColor
+            btn.tag = row
+            btn.target = self
+            btn.action = #selector(favoriteClicked(_:))
+            btn.translatesAutoresizingMaskIntoConstraints = false
+            cell.addSubview(btn)
+            NSLayoutConstraint.activate([
+                btn.centerXAnchor.constraint(equalTo: cell.centerXAnchor),
+                btn.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
+            ])
+            return cell
+        }
+
+        @MainActor private func textCell(id: String, song: Song) -> NSTableCellView {
+            let text: String
+            switch id {
+            case "title": text = song.title
+            case "artist": text = song.artist ?? "—"
+            case "album": text = song.album ?? "—"
+            case "genre": text = song.displayGenre ?? "—"
+            case "time": text = formatTime(song.duration)
+            default: text = ""
+            }
+            let label = NSTextField(labelWithString: text)
+            label.lineBreakMode = .byTruncatingTail
+            label.translatesAutoresizingMaskIntoConstraints = false
+            // Title is the primary label; other columns are dimmed. Assigning
+            // `cell.textField` lets both turn white on the selected row.
+            let cell: NSTableCellView = (id == "title") ? NSTableCellView() : SecondaryTextCell()
+            if id != "title" { label.textColor = .secondaryLabelColor }
+            cell.textField = label
+            if id == "time" {
+                label.alignment = .right
+                label.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+            }
+            cell.addSubview(label)
+            let trailing = (id == "time") ? -6.0 : -4.0
+            NSLayoutConstraint.activate([
+                label.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 4),
+                label.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: trailing),
+                label.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
+            ])
+            return cell
         }
 
         func tableViewSelectionDidChange(_ notification: Notification) {

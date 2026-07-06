@@ -29,16 +29,16 @@ struct InnerResponse<Body: Decodable & Sendable>: Decodable, Sendable {
     }
 
     init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: StatusKeys.self)
-        let status = try c.decodeIfPresent(String.self, forKey: .status) ?? "ok"
+        let container = try decoder.container(keyedBy: StatusKeys.self)
+        let status = try container.decodeIfPresent(String.self, forKey: .status) ?? "ok"
         info = ServerInfo(
             status: status,
-            version: try c.decodeIfPresent(String.self, forKey: .version),
-            type: try c.decodeIfPresent(String.self, forKey: .type),
-            serverVersion: try c.decodeIfPresent(String.self, forKey: .serverVersion),
-            openSubsonic: try c.decodeIfPresent(Bool.self, forKey: .openSubsonic)
+            version: try container.decodeIfPresent(String.self, forKey: .version),
+            type: try container.decodeIfPresent(String.self, forKey: .type),
+            serverVersion: try container.decodeIfPresent(String.self, forKey: .serverVersion),
+            openSubsonic: try container.decodeIfPresent(Bool.self, forKey: .openSubsonic)
         )
-        error = try c.decodeIfPresent(SubsonicAPIError.self, forKey: .error)
+        error = try container.decodeIfPresent(SubsonicAPIError.self, forKey: .error)
         body = status == "ok" ? try Body(from: decoder) : nil
     }
 }

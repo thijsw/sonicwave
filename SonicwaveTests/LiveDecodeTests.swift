@@ -14,9 +14,9 @@ struct LiveDecodeTests {
     }
 
     private func liveEnv() -> Env? {
-        let e = ProcessInfo.processInfo.environment
-        guard let host = e["SONICWAVE_HOST"], let url = URL(string: host),
-              let user = e["SONICWAVE_USER"], let pass = e["SONICWAVE_PASS"] else { return nil }
+        let env = ProcessInfo.processInfo.environment
+        guard let host = env["SONICWAVE_HOST"], let url = URL(string: host),
+              let user = env["SONICWAVE_USER"], let pass = env["SONICWAVE_PASS"] else { return nil }
         return Env(host: url, user: user, pass: pass)
     }
 
@@ -31,6 +31,22 @@ struct LiveDecodeTests {
         let info = try await client(env).ping()
         #expect(info.status == "ok")
         #expect(info.type != nil)
+    }
+
+    /// Largest sample-to-sample jump, split into interior vs batch-boundary steps.
+    private func maxSteps(samples: [Float], boundaries: [Int]) -> (interior: Float, boundary: Float) {
+        let boundarySet = Set(boundaries)
+        var maxInterior: Float = 0
+        var maxBoundary: Float = 0
+        for idx in 1..<samples.count {
+            let step = abs(samples[idx] - samples[idx - 1])
+            if boundarySet.contains(idx) {
+                maxBoundary = max(maxBoundary, step)
+            } else {
+                maxInterior = max(maxInterior, step)
+            }
+        }
+        return (maxInterior, maxBoundary)
     }
 
     @Test func decodesRealStreamToPCM() async throws {
@@ -66,9 +82,10 @@ struct LiveDecodeTests {
         var boundaries: [Int] = []
         for await box in source.buffers {
             #expect(box.buffer.format.sampleRate == 44_100)
-            if let ch = box.buffer.floatChannelData, box.buffer.frameLength > 0 {
+            if let channelData = box.buffer.floatChannelData, box.buffer.frameLength > 0 {
                 boundaries.append(samples.count)
-                samples.append(contentsOf: UnsafeBufferPointer(start: ch[0], count: Int(box.buffer.frameLength)))
+                samples.append(contentsOf: UnsafeBufferPointer(start: channelData[0],
+                                                               count: Int(box.buffer.frameLength)))
             }
         }
         #expect(samples.count > 44_100) // > ~1 second of PCM
@@ -88,14 +105,7 @@ struct LiveDecodeTests {
 
         // Continuity: a per-batch boundary must not be glitchier than the natural
         // interior signal. A dropout/discontinuity at a boundary = crackle.
-        let boundarySet = Set(boundaries)
-        var maxInterior: Float = 0
-        var maxBoundary: Float = 0
-        for n in 1..<samples.count {
-            let step = abs(samples[n] - samples[n - 1])
-            if boundarySet.contains(n) { maxBoundary = max(maxBoundary, step) }
-            else { maxInterior = max(maxInterior, step) }
-        }
+        let (maxInterior, maxBoundary) = maxSteps(samples: samples, boundaries: boundaries)
         print("[crackle-live] streamSeconds=\(streamSeconds) refSeconds=\(refSeconds) " +
               "batches=\(boundaries.count) maxInterior=\(maxInterior) maxBoundary=\(maxBoundary)")
         #expect(maxBoundary <= maxInterior * 2)

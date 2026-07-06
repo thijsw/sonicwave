@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// The now-playing experience lives in the window's top toolbar (a radical move
-/// from the classic bottom bar): transport controls sit at the leading edge, an
-/// "LCD" now-playing display is centered, and volume sits trailing. These views
-/// are wired into the toolbar from `RootView`. See docs/04-ui-ux.md.
+// The now-playing experience lives in the window's top toolbar (a radical move
+// from the classic bottom bar): transport controls sit at the leading edge, an
+// "LCD" now-playing display is centered, and volume sits trailing. These views
+// are wired into the toolbar from `RootView`. See docs/04-ui-ux.md.
 
 // MARK: - Transport (above the sidebar)
 
@@ -180,12 +180,12 @@ struct SlimSlider: View {
 
     var body: some View {
         GeometryReader { geo in
-            let w = geo.size.width
-            let r = thumbSize / 2
-            let usable = max(w - thumbSize, 0.0001)
+            let width = geo.size.width
+            let thumbRadius = thumbSize / 2
+            let usable = max(width - thumbSize, 0.0001)
             let span = max(range.upperBound - range.lowerBound, .leastNonzeroMagnitude)
             let fraction = min(max((value - range.lowerBound) / span, 0), 1)
-            let thumbX = r + fraction * usable
+            let thumbX = thumbRadius + fraction * usable
 
             ZStack(alignment: .leading) {
                 Capsule().fill(.primary.opacity(0.16))
@@ -195,16 +195,16 @@ struct SlimSlider: View {
                 Circle().fill(.white)
                     .frame(width: thumbSize, height: thumbSize)
                     .shadow(color: .black.opacity(0.35), radius: 1, y: 0.5)
-                    .offset(x: thumbX - r)
+                    .offset(x: thumbX - thumbRadius)
             }
             .frame(maxHeight: .infinity)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
-                    .onChanged { g in
+                    .onChanged { drag in
                         if !editing { editing = true; onEditingChanged(true) }
-                        let f = min(max((g.location.x - r) / usable, 0), 1)
-                        value = range.lowerBound + f * span
+                        let dragFraction = min(max((drag.location.x - thumbRadius) / usable, 0), 1)
+                        value = range.lowerBound + dragFraction * span
                     }
                     .onEnded { _ in
                         editing = false

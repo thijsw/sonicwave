@@ -12,8 +12,8 @@ struct TrackTableView: View {
     let tracks: [Song]
     /// Content columns to show, in order — specified explicitly per call site.
     let columns: [TrackColumn]
-    var onRemoveFromPlaylist: ((IndexSet) -> Void)? = nil
-    var onMovePlaylist: ((IndexSet, Int) -> Void)? = nil
+    var onRemoveFromPlaylist: ((IndexSet) -> Void)?
+    var onMovePlaylist: ((IndexSet, Int) -> Void)?
 
     @Environment(LibraryModel.self) private var library
     @Environment(PlayerModel.self) private var player
@@ -74,6 +74,25 @@ struct TrackTableView: View {
         menu.addItem(ClosureMenuItem(title: "Add to Up Next") { player.enqueue(chosen) })
         menu.addItem(.separator())
 
+        menu.addItem(addToPlaylistItem(chosen))
+
+        let allStarred = chosen.allSatisfy { isStarred($0) }
+        menu.addItem(ClosureMenuItem(title: allStarred ? "Remove from Favorites" : "Add to Favorites") {
+            toggleStar(chosen.map(\.id), star: !allStarred)
+        })
+
+        // Get Info + navigation to the track's album/artist — single selection.
+        if chosen.count == 1, let song = chosen.first {
+            addSingleSongItems(to: menu, song: song)
+        }
+
+        if isPlaylist {
+            addPlaylistModeItems(to: menu, indices: indices)
+        }
+        return menu
+    }
+
+    private func addToPlaylistItem(_ chosen: [Song]) -> NSMenuItem {
         let addSub = NSMenu()
         addSub.autoenablesItems = false
         addSub.addItem(ClosureMenuItem(title: "New Playlist…") {
@@ -83,57 +102,58 @@ struct TrackTableView: View {
         })
         if !library.playlists.isEmpty {
             addSub.addItem(.separator())
-            for pl in library.playlists {
-                addSub.addItem(ClosureMenuItem(title: pl.name) {
+            for playlist in library.playlists {
+                addSub.addItem(ClosureMenuItem(title: playlist.name) {
                     let ids = chosen.map(\.id)
-                    Task { await library.addToPlaylist(id: pl.id, songIds: ids) }
+                    Task { await library.addToPlaylist(id: playlist.id, songIds: ids) }
                 })
             }
         }
         let addItem = NSMenuItem(title: "Add to Playlist", action: nil, keyEquivalent: "")
         addItem.submenu = addSub
-        menu.addItem(addItem)
+        return addItem
+    }
 
-        let allStarred = chosen.allSatisfy { isStarred($0) }
-        menu.addItem(ClosureMenuItem(title: allStarred ? "Remove from Favorites" : "Add to Favorites") {
-            toggleStar(chosen.map(\.id), star: !allStarred)
-        })
-
-        // Get Info + navigation to the track's album/artist — single selection.
-        if chosen.count == 1, let song = chosen.first {
-            menu.addItem(.separator())
-            menu.addItem(ClosureMenuItem(title: "Get Info") { infoSong = song })
-            if let albumId = song.albumId {
-                menu.addItem(ClosureMenuItem(title: "Go to Album") {
-                    Task {
-                        if let album = await library.album(id: albumId) {
-                            navigator.openAlbum(album)
-                        }
+    private func addSingleSongItems(to menu: NSMenu, song: Song) {
+        menu.addItem(.separator())
+        menu.addItem(ClosureMenuItem(title: "Get Info") { infoSong = song })
+        if let albumId = song.albumId {
+            menu.addItem(ClosureMenuItem(title: "Go to Album") {
+                Task {
+                    if let album = await library.album(id: albumId) {
+                        navigator.openAlbum(album)
                     }
-                })
-            }
-            if let artistId = song.artistId {
-                menu.addItem(ClosureMenuItem(title: "Go to Artist") {
-                    navigator.openArtist(Artist(id: artistId, name: song.artist ?? "—"))
-                })
-            }
+                }
+            })
         }
+        if let artistId = song.artistId {
+            menu.addItem(ClosureMenuItem(title: "Go to Artist") {
+                navigator.openArtist(Artist(id: artistId, name: song.artist ?? "—"))
+            })
+        }
+    }
 
-        if isPlaylist {
-            menu.addItem(.separator())
-            let lo = indices.min() ?? 0, hi = indices.max() ?? 0
-            if let onMovePlaylist {
-                menu.addItem(ClosureMenuItem(title: "Move to Top", enabled: lo != 0) { onMovePlaylist(indices, 0) })
-                menu.addItem(ClosureMenuItem(title: "Move Up", enabled: lo != 0) { onMovePlaylist(indices, lo - 1) })
-                menu.addItem(ClosureMenuItem(title: "Move Down", enabled: hi != tracks.count - 1) { onMovePlaylist(indices, hi + 2) })
-                menu.addItem(ClosureMenuItem(title: "Move to Bottom", enabled: hi != tracks.count - 1) { onMovePlaylist(indices, tracks.count) })
-            }
-            if let onRemoveFromPlaylist {
-                menu.addItem(.separator())
-                menu.addItem(ClosureMenuItem(title: "Remove from Playlist") { onRemoveFromPlaylist(indices) })
-            }
+    private func addPlaylistModeItems(to menu: NSMenu, indices: IndexSet) {
+        menu.addItem(.separator())
+        let lo = indices.min() ?? 0, hi = indices.max() ?? 0
+        if let onMovePlaylist {
+            menu.addItem(ClosureMenuItem(title: "Move to Top", enabled: lo != 0) {
+                onMovePlaylist(indices, 0)
+            })
+            menu.addItem(ClosureMenuItem(title: "Move Up", enabled: lo != 0) {
+                onMovePlaylist(indices, lo - 1)
+            })
+            menu.addItem(ClosureMenuItem(title: "Move Down", enabled: hi != tracks.count - 1) {
+                onMovePlaylist(indices, hi + 2)
+            })
+            menu.addItem(ClosureMenuItem(title: "Move to Bottom", enabled: hi != tracks.count - 1) {
+                onMovePlaylist(indices, tracks.count)
+            })
         }
-        return menu
+        if let onRemoveFromPlaylist {
+            menu.addItem(.separator())
+            menu.addItem(ClosureMenuItem(title: "Remove from Playlist") { onRemoveFromPlaylist(indices) })
+        }
     }
 
     private func isStarred(_ song: Song) -> Bool {
@@ -148,9 +168,9 @@ struct TrackTableView: View {
 
 func formatTime(_ seconds: Int?) -> String {
     guard let seconds, seconds > 0 else { return "—" }
-    let m = seconds / 60
-    let s = seconds % 60
-    return String(format: "%d:%02d", m, s)
+    let minutes = seconds / 60
+    let remainder = seconds % 60
+    return String(format: "%d:%02d", minutes, remainder)
 }
 
 func formatTime(_ seconds: TimeInterval) -> String {

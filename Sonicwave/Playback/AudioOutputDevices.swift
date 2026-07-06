@@ -155,9 +155,9 @@ enum AudioOutputDevices {
             mSelector: selector,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain)
-        var cf: Unmanaged<CFString>?
+        var cfString: Unmanaged<CFString>?
         var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
-        guard AudioObjectGetPropertyData(id, &addr, 0, nil, &size, &cf) == noErr, let cf else { return nil }
-        return cf.takeRetainedValue() as String
+        guard AudioObjectGetPropertyData(id, &addr, 0, nil, &size, &cfString) == noErr, let cfString else { return nil }
+        return cfString.takeRetainedValue() as String
     }
 }

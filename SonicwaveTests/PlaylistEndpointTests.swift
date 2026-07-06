@@ -9,43 +9,43 @@ struct PlaylistEndpointTests {
     }
 
     @Test func createWithSongs() {
-        let e = Endpoint.createPlaylist(name: "Road Trip", songIds: ["1", "2"])
-        #expect(e.method == "createPlaylist")
-        #expect(e.queryItems.contains(URLQueryItem(name: "name", value: "Road Trip")))
-        #expect(values(e.queryItems, "songId") == ["1", "2"])
-        #expect(values(e.queryItems, "playlistId").isEmpty)
+        let endpoint = Endpoint.createPlaylist(name: "Road Trip", songIds: ["1", "2"])
+        #expect(endpoint.method == "createPlaylist")
+        #expect(endpoint.queryItems.contains(URLQueryItem(name: "name", value: "Road Trip")))
+        #expect(values(endpoint.queryItems, "songId") == ["1", "2"])
+        #expect(values(endpoint.queryItems, "playlistId").isEmpty)
     }
 
     @Test func createEmpty() {
-        let e = Endpoint.createPlaylist(name: "Empty")
-        #expect(values(e.queryItems, "songId").isEmpty)
-        #expect(e.queryItems.contains(URLQueryItem(name: "name", value: "Empty")))
+        let endpoint = Endpoint.createPlaylist(name: "Empty")
+        #expect(values(endpoint.queryItems, "songId").isEmpty)
+        #expect(endpoint.queryItems.contains(URLQueryItem(name: "name", value: "Empty")))
     }
 
     @Test func replaceForReorderKeepsOrder() {
-        let e = Endpoint.createPlaylist(name: "Mix", playlistId: "pl-9", songIds: ["c", "a", "b"])
-        #expect(e.method == "createPlaylist")
-        #expect(e.queryItems.first == URLQueryItem(name: "playlistId", value: "pl-9"))
-        #expect(values(e.queryItems, "songId") == ["c", "a", "b"])
+        let endpoint = Endpoint.createPlaylist(name: "Mix", playlistId: "pl-9", songIds: ["c", "a", "b"])
+        #expect(endpoint.method == "createPlaylist")
+        #expect(endpoint.queryItems.first == URLQueryItem(name: "playlistId", value: "pl-9"))
+        #expect(values(endpoint.queryItems, "songId") == ["c", "a", "b"])
     }
 
     @Test func renameViaUpdate() {
-        let e = Endpoint.updatePlaylist(id: "p1", name: "New Name")
-        #expect(e.method == "updatePlaylist")
-        #expect(e.queryItems.contains(URLQueryItem(name: "playlistId", value: "p1")))
-        #expect(e.queryItems.contains(URLQueryItem(name: "name", value: "New Name")))
+        let endpoint = Endpoint.updatePlaylist(id: "p1", name: "New Name")
+        #expect(endpoint.method == "updatePlaylist")
+        #expect(endpoint.queryItems.contains(URLQueryItem(name: "playlistId", value: "p1")))
+        #expect(endpoint.queryItems.contains(URLQueryItem(name: "name", value: "New Name")))
     }
 
     @Test func addAndRemoveViaUpdate() {
-        let e = Endpoint.updatePlaylist(id: "p1", songIdsToAdd: ["x", "y"], songIndexesToRemove: [2, 0])
-        #expect(values(e.queryItems, "songIdToAdd") == ["x", "y"])
-        #expect(values(e.queryItems, "songIndexToRemove") == ["2", "0"])
+        let endpoint = Endpoint.updatePlaylist(id: "p1", songIdsToAdd: ["x", "y"], songIndexesToRemove: [2, 0])
+        #expect(values(endpoint.queryItems, "songIdToAdd") == ["x", "y"])
+        #expect(values(endpoint.queryItems, "songIndexToRemove") == ["2", "0"])
     }
 
     @Test func delete() {
-        let e = Endpoint.deletePlaylist(id: "p1")
-        #expect(e.method == "deletePlaylist")
-        #expect(e.queryItems == [URLQueryItem(name: "id", value: "p1")])
+        let endpoint = Endpoint.deletePlaylist(id: "p1")
+        #expect(endpoint.method == "deletePlaylist")
+        #expect(endpoint.queryItems == [URLQueryItem(name: "id", value: "p1")])
     }
 
     @Test func starAndUnstar() {

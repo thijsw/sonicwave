@@ -1,0 +1,12 @@
+excluded:
+  - DerivedData
+  - .build
+
+identifier_name:
+  excluded:
+    - id
+    - i
+    - x
+    - y
+    - lo
+    - hi

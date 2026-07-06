@@ -21,7 +21,7 @@ struct Endpoint: Sendable {
         Endpoint("getAlbumList2", [
             .init(name: "type", value: type),
             .init(name: "size", value: String(size)),
-            .init(name: "offset", value: String(offset)),
+            .init(name: "offset", value: String(offset))
         ])
     }
 
@@ -47,7 +47,7 @@ struct Endpoint: Sendable {
         Endpoint("getSongsByGenre", [
             .init(name: "genre", value: genre),
             .init(name: "count", value: String(count)),
-            .init(name: "offset", value: String(offset)),
+            .init(name: "offset", value: String(offset))
         ])
     }
 
@@ -72,7 +72,7 @@ struct Endpoint: Sendable {
             .init(name: "songCount", value: String(songCount)),
             .init(name: "songOffset", value: String(songOffset)),
             .init(name: "albumCount", value: String(albumCount)),
-            .init(name: "artistCount", value: String(artistCount)),
+            .init(name: "artistCount", value: String(artistCount))
         ])
     }
 

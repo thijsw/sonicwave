@@ -140,7 +140,8 @@ final class LibraryModel {
         guard genres.isEmpty else { return }
         do {
             let body = try await client.send(.genres, as: GenresBody.self)
-            genres = (body.genres.genre ?? []).sorted { $0.value.localizedCaseInsensitiveCompare($1.value) == .orderedAscending }
+            genres = (body.genres.genre ?? [])
+                .sorted { $0.value.localizedCaseInsensitiveCompare($1.value) == .orderedAscending }
         } catch {
             genres = []
         }
@@ -308,7 +309,8 @@ final class LibraryModel {
 
     func songs(forGenre genre: String) async -> [Song] {
         do {
-            let body = try await client.send(.songsByGenre(genre, count: Self.pageSize, offset: 0), as: SongsByGenreBody.self)
+            let body = try await client.send(.songsByGenre(genre, count: Self.pageSize, offset: 0),
+                                             as: SongsByGenreBody.self)
             return body.songsByGenre.song ?? []
         } catch {
             return []

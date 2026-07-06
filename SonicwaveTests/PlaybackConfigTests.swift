@@ -7,32 +7,32 @@ import AudioToolbox
 /// See docs/03-playback-engine.md, docs/08-testing.md.
 struct PlaybackConfigTests {
     private func defaults() -> UserDefaults {
-        let d = UserDefaults(suiteName: "PlaybackConfigTests-\(UUID().uuidString)")!
-        return d
+        let store = UserDefaults(suiteName: "PlaybackConfigTests-\(UUID().uuidString)")!
+        return store
     }
 
     @Test func transcodeDisabledYieldsNoParams() {
-        let d = defaults()
-        d.set(false, forKey: "transcodeEnabled")
-        let prefs = TranscodePrefs.current(d)
+        let store = defaults()
+        store.set(false, forKey: "transcodeEnabled")
+        let prefs = TranscodePrefs.current(store)
         #expect(prefs.format == nil)
         #expect(prefs.maxBitRate == nil)
     }
 
     @Test func transcodeEnabledUsesConfiguredValues() {
-        let d = defaults()
-        d.set(true, forKey: "transcodeEnabled")
-        d.set("opus", forKey: "transcodeFormat")
-        d.set(192, forKey: "transcodeMaxBitRate")
-        let prefs = TranscodePrefs.current(d)
+        let store = defaults()
+        store.set(true, forKey: "transcodeEnabled")
+        store.set("opus", forKey: "transcodeFormat")
+        store.set(192, forKey: "transcodeMaxBitRate")
+        let prefs = TranscodePrefs.current(store)
         #expect(prefs.format == "opus")
         #expect(prefs.maxBitRate == 192)
     }
 
     @Test func transcodeEnabledFallsBackToDefaults() {
-        let d = defaults()
-        d.set(true, forKey: "transcodeEnabled")
-        let prefs = TranscodePrefs.current(d)
+        let store = defaults()
+        store.set(true, forKey: "transcodeEnabled")
+        let prefs = TranscodePrefs.current(store)
         #expect(prefs.format == "mp3")
         #expect(prefs.maxBitRate == 320)
     }

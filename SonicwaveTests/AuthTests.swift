@@ -15,11 +15,11 @@ struct AuthTests {
     }
 
     @Test func saltIsRandomAndCorrectLength() {
-        let a = SubsonicClient.randomSalt(length: 12)
-        let b = SubsonicClient.randomSalt(length: 12)
-        #expect(a.count == 12)
-        #expect(b.count == 12)
-        #expect(a != b)
+        let saltA = SubsonicClient.randomSalt(length: 12)
+        let saltB = SubsonicClient.randomSalt(length: 12)
+        #expect(saltA.count == 12)
+        #expect(saltB.count == 12)
+        #expect(saltA != saltB)
     }
 
     @Test func authFailureCodesAreDetected() {

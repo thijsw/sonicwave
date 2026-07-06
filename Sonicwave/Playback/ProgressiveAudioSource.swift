@@ -67,9 +67,9 @@ final class ProgressiveAudioSource: AudioStreamSource {
         guard let streamID else { return }
         data.withUnsafeBytes { raw in
             if let base = raw.baseAddress, !raw.isEmpty {
-                let st = AudioFileStreamParseBytes(streamID, UInt32(raw.count), base,
-                                              AudioFileStreamParseFlags(rawValue: 0))
-                if st != noErr { Self.log.error("AudioFileStreamParseBytes failed: \(st)") }
+                let status = AudioFileStreamParseBytes(streamID, UInt32(raw.count), base,
+                                                       AudioFileStreamParseFlags(rawValue: 0))
+                if status != noErr { Self.log.error("AudioFileStreamParseBytes failed: \(status)") }
             }
         }
     }
@@ -116,18 +116,20 @@ final class ProgressiveAudioSource: AudioStreamSource {
 
     private func applySkip(_ pcm: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
         guard skipFrames > 0 else { return pcm }
-        let n = AVAudioFramePosition(pcm.frameLength)
-        defer { producedFrames += n }
+        let frames = AVAudioFramePosition(pcm.frameLength)
+        defer { producedFrames += frames }
         if producedFrames >= skipFrames { return pcm }            // fully past the seek
-        if producedFrames + n <= skipFrames { return nil }        // fully before the seek
+        if producedFrames + frames <= skipFrames { return nil }   // fully before the seek
         // Straddles the seek point: keep the tail.
         let drop = Int(skipFrames - producedFrames)
         let keep = Int(pcm.frameLength) - drop
-        guard keep > 0, let trimmed = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: AVAudioFrameCount(keep)) else { return nil }
+        guard keep > 0,
+              let trimmed = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: AVAudioFrameCount(keep))
+        else { return nil }
         trimmed.frameLength = AVAudioFrameCount(keep)
-        if let s = pcm.floatChannelData, let d = trimmed.floatChannelData {
-            for ch in 0..<Int(outputFormat.channelCount) {
-                memcpy(d[ch], s[ch] + drop, keep * MemoryLayout<Float>.size)
+        if let src = pcm.floatChannelData, let dst = trimmed.floatChannelData {
+            for channel in 0..<Int(outputFormat.channelCount) {
+                memcpy(dst[channel], src[channel] + drop, keep * MemoryLayout<Float>.size)
             }
         }
         return trimmed
@@ -147,10 +149,10 @@ final class ProgressiveAudioSource: AudioStreamSource {
             accum?.frameLength = 0
         }
         guard let dst = accum else { yieldBuffer(pcm); return }
-        let off = Int(dst.frameLength), n = Int(pcm.frameLength)
-        if let s = pcm.floatChannelData, let d = dst.floatChannelData {
-            for ch in 0..<Int(outputFormat.channelCount) {
-                memcpy(d[ch] + off, s[ch], n * MemoryLayout<Float>.size)
+        let off = Int(dst.frameLength), frameCount = Int(pcm.frameLength)
+        if let src = pcm.floatChannelData, let dstData = dst.floatChannelData {
+            for channel in 0..<Int(outputFormat.channelCount) {
+                memcpy(dstData[channel] + off, src[channel], frameCount * MemoryLayout<Float>.size)
             }
             dst.frameLength += pcm.frameLength
         }
@@ -158,7 +160,7 @@ final class ProgressiveAudioSource: AudioStreamSource {
     }
 
     private func flushAccum() {
-        if let a = accum, a.frameLength > 0 { yieldBuffer(a) }
+        if let pending = accum, pending.frameLength > 0 { yieldBuffer(pending) }
         accum = nil
     }
 
@@ -169,14 +171,14 @@ final class ProgressiveAudioSource: AudioStreamSource {
     // MARK: - C callbacks (no captured context → convert to C function pointers)
 
     private static let propertyProc: AudioFileStream_PropertyListenerProc = { clientData, _, propertyID, _ in
-        let me = Unmanaged<ProgressiveAudioSource>.fromOpaque(clientData).takeUnretainedValue()
-        me.handleProperty(propertyID)
+        let source = Unmanaged<ProgressiveAudioSource>.fromOpaque(clientData).takeUnretainedValue()
+        source.handleProperty(propertyID)
     }
 
-    private static let packetsProc: AudioFileStream_PacketsProc = { clientData, numberBytes, numberPackets, inputData, packetDescriptions in
-        let me = Unmanaged<ProgressiveAudioSource>.fromOpaque(clientData).takeUnretainedValue()
-        me.handlePackets(numberBytes: numberBytes, numberPackets: numberPackets,
-                         inputData: inputData, packetDescriptions: packetDescriptions)
+    private static let packetsProc: AudioFileStream_PacketsProc = { context, bytes, packets, data, descs in
+        let source = Unmanaged<ProgressiveAudioSource>.fromOpaque(context).takeUnretainedValue()
+        source.handlePackets(numberBytes: bytes, numberPackets: packets,
+                             inputData: data, packetDescriptions: descs)
     }
 
     private func handleProperty(_ propertyID: AudioFileStreamPropertyID) {
@@ -186,7 +188,8 @@ final class ProgressiveAudioSource: AudioStreamSource {
 
         var asbd = AudioStreamBasicDescription()
         var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
-        guard AudioFileStreamGetProperty(streamID, kAudioFileStreamProperty_DataFormat, &size, &asbd) == noErr else { return }
+        guard AudioFileStreamGetProperty(streamID, kAudioFileStreamProperty_DataFormat,
+                                         &size, &asbd) == noErr else { return }
         guard let source = AVAudioFormat(streamDescription: &asbd) else { return }
 
         sourceFormat = source
@@ -196,7 +199,59 @@ final class ProgressiveAudioSource: AudioStreamSource {
         }
         converter = AVAudioConverter(from: source, to: outputFormat)
         let isPCM = asbd.mFormatID == kAudioFormatLinearPCM
-        Self.log.debug("source format id=\(asbd.mFormatID) sr=\(asbd.mSampleRate) → out sr=\(self.outputFormat.sampleRate) pcm=\(isPCM) converter=\(self.converter != nil)")
+        Self.log.debug("""
+        source format id=\(asbd.mFormatID) sr=\(asbd.mSampleRate) → \
+        out sr=\(self.outputFormat.sampleRate) pcm=\(isPCM) converter=\(self.converter != nil)
+        """)
+    }
+
+    /// Uncompressed source (e.g. WAV/AIFF): these "packets" are raw PCM frames
+    /// and must go in an AVAudioPCMBuffer. Wrapping linear PCM in an
+    /// AVAudioCompressedBuffer fails an internal assertion, leaving a broken
+    /// buffer that decodes to garbage — audible as crackle on those tracks.
+    private func makePCMInput(numberBytes: UInt32, inputData: UnsafeRawPointer,
+                              sourceFormat: AVAudioFormat) -> (buffer: AVAudioBuffer, estFrames: Double)? {
+        let bytesPerFrame = Int(sourceFormat.streamDescription.pointee.mBytesPerFrame)
+        guard bytesPerFrame > 0 else { return nil }
+        let frames = AVAudioFrameCount(Int(numberBytes) / bytesPerFrame)
+        guard frames > 0,
+              let pcmIn = AVAudioPCMBuffer(pcmFormat: sourceFormat, frameCapacity: frames)
+        else { return nil }
+        pcmIn.frameLength = frames
+        memcpy(pcmIn.mutableAudioBufferList.pointee.mBuffers.mData, inputData, Int(numberBytes))
+        return (pcmIn, Double(frames))
+    }
+
+    /// Compressed source: wrap this batch of packets in a compressed buffer.
+    private func makeCompressedInput(numberBytes: UInt32, numberPackets: UInt32,
+                                     inputData: UnsafeRawPointer,
+                                     packetDescriptions: UnsafeMutablePointer<AudioStreamPacketDescription>?,
+                                     sourceFormat: AVAudioFormat) -> (buffer: AVAudioBuffer, estFrames: Double) {
+        let maxPacketSize: Int
+        if let pds = packetDescriptions {
+            var largest = 0
+            for i in 0..<Int(numberPackets) { largest = max(largest, Int(pds[i].mDataByteSize)) }
+            maxPacketSize = max(largest, 1)
+        } else {
+            maxPacketSize = max(Int(numberBytes) / Int(numberPackets), 1)
+        }
+
+        let compressed = AVAudioCompressedBuffer(format: sourceFormat,
+                                                 packetCapacity: AVAudioPacketCount(numberPackets),
+                                                 maximumPacketSize: maxPacketSize)
+        compressed.byteLength = numberBytes
+        compressed.packetCount = AVAudioPacketCount(numberPackets)
+        memcpy(compressed.data, inputData, Int(numberBytes))
+        if let pds = packetDescriptions, let dest = compressed.packetDescriptions {
+            for i in 0..<Int(numberPackets) { dest[i] = pds[i] }
+        }
+
+        // Estimate output capacity from frames-per-packet (fallback for VBR).
+        let framesPerPacket = sourceFormat.streamDescription.pointee.mFramesPerPacket
+        let estFrames = framesPerPacket > 0
+            ? Double(numberPackets) * Double(framesPerPacket)
+            : Double(numberPackets) * 1024
+        return (compressed, estFrames)
     }
 
     private func handlePackets(numberBytes: UInt32, numberPackets: UInt32,
@@ -205,52 +260,17 @@ final class ProgressiveAudioSource: AudioStreamSource {
         guard numberPackets > 0,
               let sourceFormat, let converter else { return }
 
-        let inputBuffer: AVAudioBuffer
-        let estFrames: Double
-
+        let input: (buffer: AVAudioBuffer, estFrames: Double)
         if sourceFormat.streamDescription.pointee.mFormatID == kAudioFormatLinearPCM {
-            // Uncompressed source (e.g. WAV/AIFF): these "packets" are raw PCM
-            // frames and must go in an AVAudioPCMBuffer. Wrapping linear PCM in an
-            // AVAudioCompressedBuffer fails an internal assertion, leaving a broken
-            // buffer that decodes to garbage — audible as crackle on those tracks.
-            let bytesPerFrame = Int(sourceFormat.streamDescription.pointee.mBytesPerFrame)
-            guard bytesPerFrame > 0 else { return }
-            let frames = AVAudioFrameCount(Int(numberBytes) / bytesPerFrame)
-            guard frames > 0,
-                  let pcmIn = AVAudioPCMBuffer(pcmFormat: sourceFormat, frameCapacity: frames)
-            else { return }
-            pcmIn.frameLength = frames
-            memcpy(pcmIn.mutableAudioBufferList.pointee.mBuffers.mData, inputData, Int(numberBytes))
-            inputBuffer = pcmIn
-            estFrames = Double(frames)
+            guard let pcmInput = makePCMInput(numberBytes: numberBytes, inputData: inputData,
+                                              sourceFormat: sourceFormat) else { return }
+            input = pcmInput
         } else {
-            // Compressed source: wrap this batch of packets in a compressed buffer.
-            let maxPacketSize: Int
-            if let pds = packetDescriptions {
-                var m = 0
-                for i in 0..<Int(numberPackets) { m = max(m, Int(pds[i].mDataByteSize)) }
-                maxPacketSize = max(m, 1)
-            } else {
-                maxPacketSize = max(Int(numberBytes) / Int(numberPackets), 1)
-            }
-
-            let compressed = AVAudioCompressedBuffer(format: sourceFormat,
-                                                     packetCapacity: AVAudioPacketCount(numberPackets),
-                                                     maximumPacketSize: maxPacketSize)
-            compressed.byteLength = numberBytes
-            compressed.packetCount = AVAudioPacketCount(numberPackets)
-            memcpy(compressed.data, inputData, Int(numberBytes))
-            if let pds = packetDescriptions, let dest = compressed.packetDescriptions {
-                for i in 0..<Int(numberPackets) { dest[i] = pds[i] }
-            }
-
-            // Estimate output capacity from frames-per-packet (fallback for VBR).
-            let framesPerPacket = sourceFormat.streamDescription.pointee.mFramesPerPacket
-            estFrames = framesPerPacket > 0
-                ? Double(numberPackets) * Double(framesPerPacket)
-                : Double(numberPackets) * 1024
-            inputBuffer = compressed
+            input = makeCompressedInput(numberBytes: numberBytes, numberPackets: numberPackets,
+                                        inputData: inputData, packetDescriptions: packetDescriptions,
+                                        sourceFormat: sourceFormat)
         }
+        let (inputBuffer, estFrames) = input
 
         let ratio = outputFormat.sampleRate / sourceFormat.sampleRate
         let capacity = AVAudioFrameCount(estFrames * ratio) + 16_384

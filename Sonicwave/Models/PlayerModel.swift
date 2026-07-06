@@ -1,17 +1,6 @@
 import Foundation
 import Observation
 
-enum PlaybackState: Equatable, Sendable {
-    case stopped
-    case buffering
-    case playing
-    case paused
-}
-
-enum RepeatMode: String, Sendable, CaseIterable {
-    case off, all, one
-}
-
 /// Central source of truth for everything "now playing": current track, the
 /// Up Next queue, transport state and position. Observed by the main window,
 /// the menu-bar panel, and the system Now Playing center.
@@ -156,8 +145,11 @@ final class PlayerModel {
         forward { await $0.enqueueNoMore() }
     }
 
-    // MARK: - Transport
+}
 
+// MARK: - Transport & internal transitions
+
+extension PlayerModel {
     func togglePlayPause() {
         switch state {
         case .playing:
@@ -285,8 +277,11 @@ final class PlayerModel {
         queue.replaceSubrange((pivot + 1)..., with: reordered)
     }
 
-    // MARK: - Event loop
+}
 
+// MARK: - Event loop & Now Playing
+
+extension PlayerModel {
     private func startEventLoop(_ playback: PlaybackService) {
         eventTask = Task { [weak self] in
             for await event in playback.events {

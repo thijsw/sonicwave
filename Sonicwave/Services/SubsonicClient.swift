@@ -24,7 +24,7 @@ actor SubsonicClient {
     var isConfigured: Bool { credentials.load() != nil }
 
     /// Performs an endpoint call and returns the decoded body.
-    func send<Body: Decodable & Sendable>(_ endpoint: Endpoint, as: Body.Type) async throws(SubsonicError) -> Body {
+    func send<Body: Decodable & Sendable>(_ endpoint: Endpoint, as _: Body.Type) async throws(SubsonicError) -> Body {
         let wrapper: SubsonicResponseWrapper<Body> = try await perform(endpoint)
         guard let body = wrapper.response.body else {
             throw SubsonicError.decoding("missing body for \(endpoint.method)")
@@ -94,7 +94,9 @@ actor SubsonicClient {
 
     // MARK: - Request execution
 
-    private func perform<Body: Decodable & Sendable>(_ endpoint: Endpoint) async throws(SubsonicError) -> SubsonicResponseWrapper<Body> {
+    private func perform<Body: Decodable & Sendable>(
+        _ endpoint: Endpoint
+    ) async throws(SubsonicError) -> SubsonicResponseWrapper<Body> {
         guard let creds = credentials.load() else { throw SubsonicError.notConfigured }
         let request: URLRequest
         do {
@@ -107,7 +109,9 @@ actor SubsonicClient {
         return try await execute(request, method: endpoint.method)
     }
 
-    private func execute<Body: Decodable & Sendable>(_ request: URLRequest, method: String) async throws(SubsonicError) -> SubsonicResponseWrapper<Body> {
+    private func execute<Body: Decodable & Sendable>(
+        _ request: URLRequest, method: String
+    ) async throws(SubsonicError) -> SubsonicResponseWrapper<Body> {
         let data: Data
         let response: URLResponse
         do {
@@ -153,7 +157,7 @@ actor SubsonicClient {
         var items: [URLQueryItem] = [
             .init(name: "v", value: Self.protocolVersion),
             .init(name: "c", value: Self.clientName),
-            .init(name: "f", value: "json"),
+            .init(name: "f", value: "json")
         ]
         items += authItems(for: creds)
         items += endpoint.queryItems
@@ -174,7 +178,7 @@ actor SubsonicClient {
             return [
                 .init(name: "u", value: creds.username),
                 .init(name: "t", value: token),
-                .init(name: "s", value: salt),
+                .init(name: "s", value: salt)
             ]
         }
     }
@@ -198,8 +202,8 @@ actor SubsonicClient {
         withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let plain = ISO8601DateFormatter()
         plain.formatOptions = [.withInternetDateTime]
-        decoder.dateDecodingStrategy = .custom { d in
-            let container = try d.singleValueContainer()
+        decoder.dateDecodingStrategy = .custom { dateDecoder in
+            let container = try dateDecoder.singleValueContainer()
             let string = try container.decode(String.self)
             if let date = withFraction.date(from: string) ?? plain.date(from: string) {
                 return date

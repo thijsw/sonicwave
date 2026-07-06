@@ -5,8 +5,8 @@ import Foundation
 /// Server-address normalization. See docs/02-opensubsonic-api.md.
 @MainActor
 struct ConnectionTests {
-    private func norm(_ s: String) -> String? {
-        ConnectionModel.normalizedBaseURL(from: s)?.absoluteString
+    private func norm(_ address: String) -> String? {
+        ConnectionModel.normalizedBaseURL(from: address)?.absoluteString
     }
 
     @Test func keepsPlainHTTPSBase() {

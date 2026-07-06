@@ -24,10 +24,10 @@ struct DecodeContinuityTests {
         let frames = AVAudioFrameCount(sampleRate * seconds)
         let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: frames)!
         buf.frameLength = frames
-        for ch in 0..<2 {
-            let p = buf.floatChannelData![ch]
-            for n in 0..<Int(frames) {
-                p[n] = amp * sinf(2 * .pi * freq * Float(n) / Float(sampleRate))
+        for channel in 0..<2 {
+            let samples = buf.floatChannelData![channel]
+            for frame in 0..<Int(frames) {
+                samples[frame] = amp * sinf(2 * .pi * freq * Float(frame) / Float(sampleRate))
             }
         }
         return buf
@@ -38,15 +38,15 @@ struct DecodeContinuityTests {
         let profile = 1            // AAC LC (audioObjectType 2 - 1)
         let srIndex = 4            // 44100 Hz
         let channels = 2
-        var h = [UInt8](repeating: 0, count: 7)
-        h[0] = 0xFF
-        h[1] = 0xF1                // MPEG-4, layer 0, no CRC
-        h[2] = UInt8((profile << 6) | (srIndex << 2) | ((channels >> 2) & 0x1))
-        h[3] = UInt8(((channels & 0x3) << 6) | ((frameLength >> 11) & 0x3))
-        h[4] = UInt8((frameLength >> 3) & 0xFF)
-        h[5] = UInt8(((frameLength & 0x7) << 5) | 0x1F)
-        h[6] = 0xFC
-        return Data(h)
+        var header = [UInt8](repeating: 0, count: 7)
+        header[0] = 0xFF
+        header[1] = 0xF1                // MPEG-4, layer 0, no CRC
+        header[2] = UInt8((profile << 6) | (srIndex << 2) | ((channels >> 2) & 0x1))
+        header[3] = UInt8(((channels & 0x3) << 6) | ((frameLength >> 11) & 0x3))
+        header[4] = UInt8((frameLength >> 3) & 0xFF)
+        header[5] = UInt8(((frameLength & 0x7) << 5) | 0x1F)
+        header[6] = 0xFC
+        return Data(header)
     }
 
     /// Encode the sine to an ADTS-AAC byte stream (a real streaming format the
@@ -60,7 +60,11 @@ struct DecodeContinuityTests {
         let aac = try #require(AVAudioFormat(streamDescription: &asbd))
         let converter = try #require(AVAudioConverter(from: sine.format, to: aac))
 
-        final class Feed: @unchecked Sendable { var done = false; let buf: AVAudioPCMBuffer; init(_ b: AVAudioPCMBuffer) { buf = b } }
+        final class Feed: @unchecked Sendable {
+            var done = false
+            let buf: AVAudioPCMBuffer
+            init(_ buffer: AVAudioPCMBuffer) { buf = buffer }
+        }
         let feed = Feed(sine)
         let input: AVAudioConverterInputBlock = { _, status in
             if feed.done { status.pointee = .endOfStream; return nil }
@@ -115,9 +119,9 @@ struct DecodeContinuityTests {
         var boundaries: [Int] = []
         for await box in source.buffers {
             let buf = box.buffer
-            if let ch = buf.floatChannelData, buf.frameLength > 0 {
+            if let channelData = buf.floatChannelData, buf.frameLength > 0 {
                 boundaries.append(samples.count)
-                samples.append(contentsOf: UnsafeBufferPointer(start: ch[0], count: Int(buf.frameLength)))
+                samples.append(contentsOf: UnsafeBufferPointer(start: channelData[0], count: Int(buf.frameLength)))
             }
         }
 
@@ -135,15 +139,15 @@ struct DecodeContinuityTests {
         let guardN = 3000
         var maxInteriorStep: Float = 0
         if samples.count > 2 * guardN {
-            for n in (guardN + 1)..<(samples.count - guardN) {
-                maxInteriorStep = max(maxInteriorStep, abs(samples[n] - samples[n - 1]))
+            for idx in (guardN + 1)..<(samples.count - guardN) {
+                maxInteriorStep = max(maxInteriorStep, abs(samples[idx] - samples[idx - 1]))
             }
         }
 
         // Largest jump specifically across per-batch buffer boundaries.
         var maxBoundaryStep: Float = 0
-        for b in boundaries where b > guardN && b < samples.count - guardN {
-            maxBoundaryStep = max(maxBoundaryStep, abs(samples[b] - samples[b - 1]))
+        for boundary in boundaries where boundary > guardN && boundary < samples.count - guardN {
+            maxBoundaryStep = max(maxBoundaryStep, abs(samples[boundary] - samples[boundary - 1]))
         }
 
         // Evidence in the test log.
@@ -168,7 +172,7 @@ struct DecodeContinuityTests {
     /// quantization) with no discontinuities.
     @Test func bigEndianInt16ConversionIsAccurate() throws {
         let sine = makeSine()
-        let n = Int(sine.frameLength)
+        let frameCount = Int(sine.frameLength)
 
         // Big-endian, signed, packed, interleaved 16-bit — exactly AIFF (flags=14).
         var asbd = AudioStreamBasicDescription(
@@ -179,14 +183,14 @@ struct DecodeContinuityTests {
         let beFormat = try #require(AVAudioFormat(streamDescription: &asbd))
 
         // Hand-encode the sine to big-endian int16 interleaved bytes.
-        let beBuf = try #require(AVAudioPCMBuffer(pcmFormat: beFormat, frameCapacity: AVAudioFrameCount(n)))
-        beBuf.frameLength = AVAudioFrameCount(n)
+        let beBuf = try #require(AVAudioPCMBuffer(pcmFormat: beFormat, frameCapacity: AVAudioFrameCount(frameCount)))
+        beBuf.frameLength = AVAudioFrameCount(frameCount)
         let dst = beBuf.mutableAudioBufferList.pointee.mBuffers.mData!.assumingMemoryBound(to: UInt8.self)
         let src = sine.floatChannelData!
-        for f in 0..<n {
-            for ch in 0..<2 {
-                var be = Int16(max(-1, min(1, src[ch][f])) * 32767).bigEndian
-                memcpy(dst + (f * 2 + ch) * 2, &be, 2)
+        for frame in 0..<frameCount {
+            for channel in 0..<2 {
+                var beSample = Int16(max(-1, min(1, src[channel][frame])) * 32767).bigEndian
+                memcpy(dst + (frame * 2 + channel) * 2, &beSample, 2)
             }
         }
 
@@ -199,22 +203,22 @@ struct DecodeContinuityTests {
         while true {
             let pcm = try #require(AVAudioPCMBuffer(pcmFormat: canonical, frameCapacity: 8192))
             var err: NSError?
-            let st = conv.convert(to: pcm, error: &err) { _, s in
-                if provided { s.pointee = .endOfStream; return nil } // flush held tail
-                provided = true; s.pointee = .haveData; return beBuf
+            let status = conv.convert(to: pcm, error: &err) { _, inputStatus in
+                if provided { inputStatus.pointee = .endOfStream; return nil } // flush held tail
+                provided = true; inputStatus.pointee = .haveData; return beBuf
             }
-            if pcm.frameLength > 0, let ch = pcm.floatChannelData {
-                out.append(contentsOf: UnsafeBufferPointer(start: ch[0], count: Int(pcm.frameLength)))
+            if pcm.frameLength > 0, let channelData = pcm.floatChannelData {
+                out.append(contentsOf: UnsafeBufferPointer(start: channelData[0], count: Int(pcm.frameLength)))
             }
-            if st != .haveData { break }
+            if status != .haveData { break }
         }
 
         // Compare to the original channel-0 sine.
         var maxErr: Float = 0
-        let compareN = min(out.count, n)
+        let compareN = min(out.count, frameCount)
         for i in 0..<compareN { maxErr = max(maxErr, abs(out[i] - src[0][i])) }
-        print("[crackle-be] inFrames=\(n) outFrames=\(out.count) maxErr=\(maxErr)")
-        #expect(out.count == n)        // all frames recovered, none dropped
+        print("[crackle-be] inFrames=\(frameCount) outFrames=\(out.count) maxErr=\(maxErr)")
+        #expect(out.count == frameCount)        // all frames recovered, none dropped
         #expect(maxErr < 0.001)        // values accurate within int16 quantization
     }
 }

@@ -1,3 +1,7 @@
+// swiftlint:disable file_length
+// The playback engine's state (timeline spans, engine graph, device routing)
+// is one actor by design; splitting it across files would mean exposing its
+// private state. Kept whole, with extensions marking the functional areas.
 import Foundation
 import AVFoundation
 import CoreAudio
@@ -53,6 +57,17 @@ actor PlaybackService {
         var startFrame: AVAudioFramePosition
         var frameCount: AVAudioFramePosition
         var decodeComplete: Bool
+    }
+
+    /// Everything needed to decode one track onto the gapless timeline.
+    private struct DecodeRequest {
+        let songId: String
+        let suffix: String?
+        let duration: TimeInterval
+        let index: Int
+        let seekBase: TimeInterval
+        let gen: Int
+        let timelineStart: Bool
     }
 
     private var spans: [TrackSpan] = []
@@ -121,8 +136,11 @@ actor PlaybackService {
         }
     }
 
-    // MARK: - Intent
+}
 
+// MARK: - Intent
+
+extension PlaybackService {
     /// Hard-start a track from `time` seconds in (default 0). Resets the gapless
     /// timeline. Used for first play, manual skip and seek.
     func play(songId: String, suffix: String?, duration: TimeInterval, index: Int, from time: TimeInterval = 0) {
@@ -134,16 +152,16 @@ actor PlaybackService {
         if !matchRateEnabled { canonicalFormat = baseFormat }
         emit(.stateChanged(.buffering))
         if time > 0 { emit(.position(time: time, duration: duration)) }
-        startDecode(songId: songId, suffix: suffix, duration: duration, index: index,
-                    seekBase: time, gen: gen, timelineStart: true)
+        startDecode(DecodeRequest(songId: songId, suffix: suffix, duration: duration, index: index,
+                                  seekBase: time, gen: gen, timelineStart: true))
     }
 
     /// Provide the next track to pre-buffer (reply to `.wantNext`).
     func enqueueNext(songId: String, suffix: String?, duration: TimeInterval, index: Int) {
         guard awaitingNext else { return }
         awaitingNext = false
-        startDecode(songId: songId, suffix: suffix, duration: duration, index: index,
-                    seekBase: 0, gen: generation, timelineStart: false)
+        startDecode(DecodeRequest(songId: songId, suffix: suffix, duration: duration, index: index,
+                                  seekBase: 0, gen: generation, timelineStart: false))
     }
 
     /// No successor — the current track is the last one.
@@ -183,26 +201,26 @@ actor PlaybackService {
         engine.mainMixerNode.outputVolume = volume
     }
 
-    // MARK: - Decode pipeline
+}
 
-    private func startDecode(songId: String, suffix: String?, duration: TimeInterval,
-                             index: Int, seekBase: TimeInterval, gen: Int, timelineStart: Bool) {
+// MARK: - Decode pipeline
+
+extension PlaybackService {
+    private func startDecode(_ request: DecodeRequest) {
         // Begin a new span starting at the current end of the scheduled timeline.
-        let span = TrackSpan(id: songId, index: index, duration: duration, seekBase: seekBase,
+        let span = TrackSpan(id: request.songId, index: request.index, duration: request.duration,
+                             seekBase: request.seekBase,
                              startFrame: cumulativeFrames, frameCount: 0, decodeComplete: false)
         spans.append(span)
         let spanArrayIndex = spans.count - 1
 
         decodeTask = Task { [weak self] in
-            await self?.runDecode(songId: songId, suffix: suffix, index: index,
-                                  seekBase: seekBase, spanArrayIndex: spanArrayIndex, gen: gen,
-                                  timelineStart: timelineStart)
+            await self?.runDecode(request, spanArrayIndex: spanArrayIndex)
         }
     }
 
-    private func runDecode(songId: String, suffix: String?, index: Int,
-                           seekBase: TimeInterval, spanArrayIndex: Int, gen: Int,
-                           timelineStart: Bool) async {
+    private func runDecode(_ request: DecodeRequest, spanArrayIndex: Int) async {
+        let (seekBase, gen) = (request.seekBase, request.gen)
         let prefs = TranscodePrefs.current()
         // Server-side `timeOffset` only seeks *transcoded* streams; for original
         // files the server ignores it (plays from the start), so we instead decode
@@ -213,7 +231,7 @@ actor PlaybackService {
 
         let url: URL
         do {
-            url = try await client.streamURL(songId: songId, format: prefs.format,
+            url = try await client.streamURL(songId: request.songId, format: prefs.format,
                                              maxBitRate: prefs.maxBitRate, timeOffset: serverOffset)
         } catch {
             if gen == generation { emit(.failed((error as? SubsonicError)?.userMessage ?? error.localizedDescription)) }
@@ -225,7 +243,7 @@ actor PlaybackService {
         // buffer arrives). Followers join the running timeline's format so
         // gapless scheduling stays on one node.
         let chooseOutput: (@Sendable (AVAudioFormat) -> AVAudioFormat)? =
-            (timelineStart && matchRateEnabled)
+            (request.timelineStart && matchRateEnabled)
                 ? { @Sendable source in
                     AVAudioFormat(standardFormatWithSampleRate: source.sampleRate, channels: 2)
                         ?? source
@@ -234,7 +252,7 @@ actor PlaybackService {
         let source = ProgressiveAudioSource(outputFormat: canonicalFormat,
                                             skipSeconds: skipSeconds,
                                             chooseOutput: chooseOutput)
-        source.open(fileTypeHint: audioFileTypeHint(forSuffix: suffix))
+        source.open(fileTypeHint: audioFileTypeHint(forSuffix: request.suffix))
         let decoded = source.buffers
 
         let consume = Task { [weak self] in
@@ -258,7 +276,7 @@ actor PlaybackService {
         }
         source.finish()
         _ = await consume.value
-        await decodeComplete(spanArrayIndex: spanArrayIndex, index: index, gen: gen)
+        await decodeComplete(spanArrayIndex: spanArrayIndex, index: request.index, gen: gen)
     }
 
     // MARK: - Bounded read-ahead
@@ -275,8 +293,11 @@ actor PlaybackService {
         cumulativeFrames - (currentSampleTime() ?? 0)
     }
 
-    // MARK: - Output device
+}
 
+// MARK: - Output device
+
+extension PlaybackService {
     /// Choose the output device by UID (nil = system default). Persists and
     /// applies immediately if the engine is live.
     func setOutputDevice(uid: String?) {
@@ -297,10 +318,10 @@ actor PlaybackService {
     /// Point the engine's output unit at the selected device (or the current
     /// system default when none is chosen / the chosen one is gone).
     private func applyOutputDevice() {
-        guard let au = engine.outputNode.audioUnit else { return }
+        guard let audioUnit = engine.outputNode.audioUnit else { return }
         let resolved = outputDeviceUID.flatMap { AudioOutputDevices.deviceID(forUID: $0) }
         guard var dev = resolved ?? AudioOutputDevices.defaultOutputID() else { return }
-        let status = AudioUnitSetProperty(au, kAudioOutputUnitProperty_CurrentDevice,
+        let status = AudioUnitSetProperty(audioUnit, kAudioOutputUnitProperty_CurrentDevice,
                                           kAudioUnitScope_Global, 0, &dev,
                                           UInt32(MemoryLayout<AudioDeviceID>.size))
         if status != noErr {
@@ -339,7 +360,11 @@ actor PlaybackService {
     /// notifications this recovery provokes from looping.
     private func handleConfigChange() {
         guard engineConnected else { return }
-        Self.log.info("config change (started=\(self.hasStartedPlayback, privacy: .public), engineRunning=\(self.engine.isRunning, privacy: .public), nodePlaying=\(self.node.isPlaying, privacy: .public))")
+        Self.log.info("""
+        config change (started=\(self.hasStartedPlayback, privacy: .public), \
+        engineRunning=\(self.engine.isRunning, privacy: .public), \
+        nodePlaying=\(self.node.isPlaying, privacy: .public))
+        """)
         if hasStartedPlayback {
             recoverPlayback()
         } else {
@@ -398,6 +423,11 @@ actor PlaybackService {
         if wasPaused { pause() }
     }
 
+}
+
+// MARK: - Scheduling
+
+extension PlaybackService {
     /// Back-pressure: once we're `maxReadAheadFrames` ahead, pause the network
     /// transfer and decoding until playback drains the buffer to
     /// `minReadAheadFrames`, then resume. Awaiting frees the actor so scheduling,
@@ -501,8 +531,11 @@ actor PlaybackService {
 
     private var allDecodeComplete: Bool { spans.allSatisfy(\.decodeComplete) }
 
-    // MARK: - Seek
+}
 
+// MARK: - Seek, position & teardown
+
+extension PlaybackService {
     /// Seek re-opens the current track at `time` (Option A has no random access).
     func seek(to time: TimeInterval) {
         guard let active = activeSpan() else { return }

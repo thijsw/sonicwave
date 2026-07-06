@@ -118,7 +118,8 @@ private struct PlaybackSettingsView: View {
                         .font(.callout).foregroundStyle(.secondary)
                 }
                 Toggle("Match hardware sample rate", isOn: $matchSampleRate)
-                Text("Runs the output device at each track's native sample rate, so nothing is resampled on the way to your DAC. Other apps sharing the device may blip when the rate changes.")
+                Text("Runs the output device at each track's native sample rate, so nothing is resampled " +
+                     "on the way to your DAC. Other apps sharing the device may blip when the rate changes.")
                     .font(.callout).foregroundStyle(.secondary)
             }
             Section("Streaming") {

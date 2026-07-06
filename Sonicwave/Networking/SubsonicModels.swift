@@ -37,7 +37,7 @@ struct Song: Identifiable, Codable, Sendable, Hashable {
     /// File suffixes of lossless encodings, where the format says more than the
     /// (high, variable) bit rate.
     private static let losslessSuffixes: Set<String> = [
-        "flac", "alac", "wav", "aif", "aiff", "ape", "dsf", "dff", "wv", "shn",
+        "flac", "alac", "wav", "aif", "aiff", "ape", "dsf", "dff", "wv", "shn"
     ]
 
     /// Short encoding label for quality-minded listeners: the format name for
