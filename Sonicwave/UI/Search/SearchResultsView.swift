@@ -88,7 +88,7 @@ struct SearchResultsView: View {
                     ForEach(results.albums) { album in
                         Button { navigator.openAlbum(album) } label: {
                             VStack(alignment: .leading, spacing: 4) {
-                                ArtworkView(coverArt: album.coverArt, size: 110, cornerRadius: 6)
+                                ArtworkView(coverArt: album.coverArt, size: 110, cornerRadius: 8)
                                 Text(album.name).font(.caption).lineLimit(1)
                                 Text(album.artist ?? "—").font(.caption2)
                                     .foregroundStyle(.secondary).lineLimit(1)

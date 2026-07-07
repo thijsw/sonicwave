@@ -61,9 +61,22 @@ struct NowPlayingDisplay: View {
     @AppStorage("showUpNext") private var showUpNext = false
     @State private var hovering = false
 
+    /// LCD geometry. The artwork is inset by the same amount on its leading,
+    /// top and bottom sides, and its corners are **concentric** with the
+    /// panel's: innerRadius = outerRadius − inset, so the two curves share a
+    /// center and the gap between them stays optically even around the corner.
+    private enum LCD {
+        static let height: CGFloat = 44
+        static let cornerRadius: CGFloat = 10
+        static let artworkInset: CGFloat = 5
+        static var artworkSize: CGFloat { height - 2 * artworkInset }         // 34
+        static var artworkRadius: CGFloat { cornerRadius - artworkInset }     // 5
+    }
+
     var body: some View {
         HStack(spacing: 11) {
-            ArtworkView(coverArt: player.currentTrack?.coverArt, size: 30, cornerRadius: 5)
+            ArtworkView(coverArt: player.currentTrack?.coverArt,
+                        size: LCD.artworkSize, cornerRadius: LCD.artworkRadius)
                 .shadow(color: .black.opacity(0.4), radius: 1.5, y: 1)
 
             VStack(spacing: 1) {
@@ -82,8 +95,11 @@ struct NowPlayingDisplay: View {
                     .layoutPriority(1)
             }
         }
-        .padding(.horizontal, 11)
-        .frame(height: 44)
+        // Leading matches the artwork's concentric inset; trailing keeps the
+        // roomier gap the time text wants.
+        .padding(.leading, LCD.artworkInset)
+        .padding(.trailing, 11)
+        .frame(height: LCD.height)
         // Flexible up to 560pt, but with a restrained ideal width: the unified
         // toolbar lays principal items out at their ideal size, and an ideal
         // that only fits on wide windows shoves the trailing items (or the LCD
@@ -99,7 +115,7 @@ struct NowPlayingDisplay: View {
         // level let the bar's square end poke out of the rounded corner.
         .background {
             ZStack(alignment: .bottomLeading) {
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: LCD.cornerRadius)
                     .fill(Color.black.opacity(0.30)
                         .shadow(.inner(color: .black.opacity(0.45), radius: 2.5, y: 1)))
                 // Playback progress as a hairline along the LCD's bottom edge.
@@ -110,13 +126,13 @@ struct NowPlayingDisplay: View {
                         .frame(maxHeight: .infinity, alignment: .bottom)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .clipShape(RoundedRectangle(cornerRadius: LCD.cornerRadius))
         }
         .overlay {
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: LCD.cornerRadius)
                 .strokeBorder(.white.opacity(hovering ? 0.22 : 0.10), lineWidth: 0.5)
         }
-        .contentShape(RoundedRectangle(cornerRadius: 8))
+        .contentShape(RoundedRectangle(cornerRadius: LCD.cornerRadius))
         .onTapGesture {
             // The panel is only relevant while something is playing or queued.
             if player.currentTrack != nil || !player.upNext.isEmpty {

@@ -330,9 +330,14 @@ private struct QueueRow: View {
                     .font(.caption).monospacedDigit().foregroundStyle(.tertiary)
             }
         }
-        .padding(.horizontal, 8)
+        // Concentric hover pill: the 36pt artwork (radius 6) is inset by the
+        // same 5pt on its leading/top/bottom sides, so the pill's radius is
+        // 6 + 5 = 11 and the two corner curves share a center. The trailing
+        // side keeps a roomier 8 for the time / remove button.
+        .padding(.leading, 5)
+        .padding(.trailing, 8)
         .padding(.vertical, 5)
-        .background(.primary.opacity(hovering ? 0.06 : 0), in: RoundedRectangle(cornerRadius: 8))
+        .background(.primary.opacity(hovering ? 0.06 : 0), in: RoundedRectangle(cornerRadius: 11))
         .onHover { hovering = $0 }
     }
 }
