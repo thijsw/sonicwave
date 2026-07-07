@@ -47,6 +47,31 @@ xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
 
 ---
 
+## Memory-leak audit (2026-07-07)
+Status: **app code verified leak-free** (static review + `leaks` runs against
+the live app under load).
+- **Static review:** all long-lived closures use `[weak self]`
+  (NowPlayingCenter remote commands, engine callbacks, event loops);
+  `DataStreamLoader` invalidates its URLSession (which retains its delegate)
+  on both completion and stream termination; `AudioDeviceListObserver`
+  removes its Core Audio listener in `deinit`; `NSMenuItem.target` is weak so
+  `ClosureMenuItem`'s self-target doesn't cycle; the one `takeRetainedValue`
+  balances Core Audio's +1; artwork `NSCache` is count-bounded (400) with
+  self-removing in-flight tasks.
+- **Runtime (leaks tool):** after 12 track skips (full decode pipeline
+  teardown/rebuild each), seeks, panel toggles, view switching, and repeated
+  context menus: **zero leaks attributable to Sonicwave code**. Footprint is
+  stable and *declines* during playback (47 MB idle → ~118 MB peak → 83 MB
+  while still playing) — the bounded read-ahead behaves as designed.
+- **Known framework-internal leak (accepted):** AudioToolbox's
+  `ListenerMap::InsertEvent` leaks ~50–100-byte AU parameter-listener
+  bindings each time the player node is (re)connected to the mixer — first
+  play, rate-change hard starts (rate matching), route recoveries. ~1.2 KB
+  per reconnect, all inside `AVAudioEngine`/`AudioToolboxCore` via the
+  documented `engine.connect` API; not fixable app-side (we already reconnect
+  only when the timeline rate actually changes). Heisenbug note: full
+  `MallocStackLogging=1` masks it; reproduce with `=lite` or none.
+
 ## M7 quick wins — shortcuts + restoration (2026-07-07)
 Status: **done & live-verified by driving the app (computer-use).**
 - **File → New Playlist… (⌘N)** replaces New Window (like Music); routed to
