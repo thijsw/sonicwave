@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+Mac App Store export. Prerequisites (one-time, Apple Developer portal /
+App Store Connect — see docs/07-distribution.md):
+  1. "Apple Distribution" + "Mac Installer Distribution" certificates in the
+     login keychain.
+  2. An App Store Connect app record for nl.huell.sonicwave.
+  3. A "Mac App Store" provisioning profile for the bundle id (download via
+     Xcode's account settings or the portal).
+Then: scripts/release.sh app-store
+-->
+<plist version="1.0">
+<dict>
+    <key>method</key>
+    <string>app-store-connect</string>
+    <key>teamID</key>
+    <string>4HNWJ993V9</string>
+    <key>signingStyle</key>
+    <string>automatic</string>
+</dict>
+</plist>

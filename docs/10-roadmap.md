@@ -11,7 +11,8 @@ playback first (M3).
 > hardware sample-rate matching) · M7 ✅ (shortcuts, full restoration incl.
 > scroll, accessibility semantics AX-verified, Light/Dark verified; the `08`
 > checklist passes — only the Liquid Glass look on macOS 26 awaits a Tahoe
-> machine, plus by-hand VoiceOver/contrast spot checks) · M8 ⏳ not started.
+> machine, plus by-hand VoiceOver/contrast spot checks) · M8 🚧 — Developer ID pipeline complete (notarized, stapled,
+> Gatekeeper-accepted); MAS portal artifacts, icon, App Privacy, CI remain.
 > See `PROGRESS.md` for the detailed build log.
 
 ## M0 — Foundation ✅
@@ -87,7 +88,7 @@ playback first (M3).
   `04`.
 - **Exit:** manual verification checklist in `08` passes.
 
-## M8 — Distribution ⏳
+## M8 — Distribution 🚧
 - App icon, App Privacy details, reviewer notes/demo credentials — `07`.
 - MAS signing/notarization pipeline; (optional) Developer ID build.
 - Full unit + UI test pass on macOS 15 / Xcode 26 CI — `08`.

@@ -18,7 +18,8 @@ milestone first. See `10-roadmap.md` for the full milestone plan.
   `4HNWJ993V9`; manual style, hardened runtime off for Debug). Ad-hoc signing
   gave every build a new designated requirement, so the keychain re-prompted
   for the server credential on each rebuild; the certificate-based requirement
-  is stable, so one "Always Allow" sticks. Release is untouched.
+  is stable, so one "Always Allow" sticks. Release signs Manual + Developer ID
+  with the hardened runtime ON (see the M8 pipeline entry).
 
 ## Milestone status
 M0 ✅ · M1 ✅ (auth/endpoints live-verified vs Navidrome 0.62) ·
@@ -35,7 +36,9 @@ M7 ✅ (shortcuts, restoration incl. scroll offset, accessibility semantics
 AX-verified, Light/Dark verified — the `08` checklist passes; only the
 Liquid Glass look awaits a macOS 26 machine, plus by-hand VoiceOver/contrast
 spot checks) ·
-M8 ⏳ (not started)
+M8 🚧 (Developer ID pipeline complete incl. notarization + stapling —
+Gatekeeper-accepted distributable build; remaining: MAS certificates/app
+record, final icon, App Privacy, reviewer notes, CI)
 
 ## How to build / test
 ```sh
@@ -46,6 +49,34 @@ xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
 ```
 
 ---
+
+## M8 — release signing pipeline (2026-07-07)
+Status: **Developer ID pipeline working end-to-end; MAS path configured and
+blocked on portal artifacts.**
+- Release build settings: Manual signing, **Developer ID Application (Huell
+  B.V., 4HNWJ993V9)**, **Hardened Runtime ON** (was `Automatic` with no team).
+  Debug unchanged (Developer ID, hardened runtime off — Keychain DR
+  stability).
+- `scripts/release.sh [developer-id|app-store]`:
+  archive → export (`scripts/ExportOptions-*.plist`) → `codesign
+  --verify --strict` + authority/`runtime`-flag assertion → notarize + staple
+  + `spctl` assess (auto-skipped with instructions until a `sonicwave`
+  notarytool keychain profile is stored) → versioned zip. `build/` is
+  git-ignored.
+- **Verified:** pipeline run produced `build/Sonicwave-0.1.0.zip`; signature
+  valid (`Authority=Developer ID Application: Huell B.V.`,
+  `flags=0x10000(runtime)`); entitlements on the artifact are exactly
+  app-sandbox + network.client; `spctl` reports "Unnotarized Developer ID"
+  (expected pre-notarization); the exported app **runs, connects via
+  Keychain creds, and plays audio** under the hardened runtime — no runtime
+  exceptions needed.
+- ✅ **Notarization round-trip verified (2026-07-07):** with the `sonicwave`
+  keychain profile stored, the pipeline notarized (status **Accepted**),
+  stapled, and passed Gatekeeper (`accepted, source=Notarized Developer ID`).
+  `build/Sonicwave-0.1.0.zip` is a fully distributable direct-download build.
+- Remaining for M8: Apple Distribution + Mac Installer certs and an ASC app
+  record for the MAS build, final app icon, App Privacy details, reviewer
+  notes/demo server, CI test job.
 
 ## M7 close-out — accessibility + scroll restoration (2026-07-07)
 Status: **M7 complete** (Tahoe/Liquid Glass verification pending a macOS 26

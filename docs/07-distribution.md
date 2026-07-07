@@ -37,18 +37,29 @@ fallback is also possible.
 - No private APIs; no Tahoe-only hard dependencies (availability-guarded — see
   `04`).
 
-## Signing & notarization ✅
+## Signing & notarization ✅ (pipeline implemented 2026-07-07)
 
-- **Mac App Store build:** managed Apple Distribution signing + App Store
-  provisioning profile; upload via Xcode Organizer / `xcodebuild` +
-  `altool`/`notarytool` pipeline as applicable.
-- **Direct-distribution fallback (optional):** Developer ID Application signing
-  + **notarization** (`notarytool`) + stapling. Build code signing into the CI
-  pipeline from the start (Hardened Runtime enabled) so switching distribution
-  modes is configuration, not rework.
-- Enable **Hardened Runtime**; no special exceptions expected for v1
-  (AVAudioEngine/MediaPlayer/Keychain/URLSession need none beyond the sandbox
-  network entitlement).
+`scripts/release.sh [developer-id|app-store]` archives the Release
+configuration and exports a signed artifact (`scripts/ExportOptions-*.plist`).
+Release build settings: Manual signing, Developer ID Application
+(team 4HNWJ993V9), **Hardened Runtime on** — verified: no runtime exceptions
+needed (playback, Keychain, networking all work in the exported app).
+
+- **Developer ID path (working end-to-end):** archive → export → signature
+  verification (`codesign --verify --strict` + Developer ID authority +
+  `runtime` flag check) → notarize + staple + Gatekeeper assess (runs when a
+  `sonicwave` notarytool keychain profile exists; skipped with instructions
+  otherwise) → versioned zip. One-time setup for notarization:
+  `xcrun notarytool store-credentials sonicwave --apple-id … --team-id
+  4HNWJ993V9` (app-specific password or ASC API key).
+- **Mac App Store path (config prepared; blocked on portal artifacts):**
+  `release.sh app-store` exports an upload-ready `.pkg` once these exist —
+  an **Apple Distribution** + **Mac Installer Distribution** certificate, an
+  App Store Connect app record for `nl.huell.sonicwave`, and a Mac App Store
+  provisioning profile (prerequisites also listed in
+  `ExportOptions-app-store.plist`).
+- Debug still signs with Developer ID (hardened runtime off) for the stable
+  Keychain designated requirement — see `PROGRESS.md`.
 
 ## Review considerations 🔶
 
@@ -59,11 +70,19 @@ fallback is also possible.
   and on auth failure (re-auth prompt) — see `02`.
 
 ## Checklist
-- [ ] App Sandbox on; only `network.client` (+ Keychain) entitled.
-- [ ] Hardened Runtime on; no unjustified exceptions.
-- [ ] Credentials in Keychain; nothing sensitive logged.
-- [ ] Info.plist: min macOS 15, music category, versioning, icon.
-- [ ] No Tahoe-only API without `#available` guard.
-- [ ] App Privacy details accurate (no tracking/analytics v1).
+- [x] App Sandbox on; only `network.client` (+ Keychain) entitled — verified
+      on the exported artifact (`codesign -d --entitlements`).
+- [x] Hardened Runtime on (Release); no exceptions needed — exported app
+      plays audio and reads the Keychain.
+- [x] Credentials in Keychain; nothing sensitive logged.
+- [x] Info.plist: min macOS 15, music category, versioning, icon (placeholder
+      icon still to be replaced before submission).
+- [x] No Tahoe-only API without `#available` guard (none used).
+- [ ] App Privacy details accurate (no tracking/analytics v1) — fill in at
+      App Store Connect submission time.
 - [ ] Reviewer notes / demo credentials prepared.
-- [ ] Signing pipeline produces MAS build (and Developer ID build if needed).
+- [x] Signing pipeline produces a verified Developer ID build
+      (`scripts/release.sh`); MAS export configured, pending the Apple
+      Distribution certificate + app record + profile.
+- [x] Notarization round-trip — Accepted, stapled, Gatekeeper
+      `source=Notarized Developer ID` (2026-07-07).

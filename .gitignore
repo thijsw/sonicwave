@@ -10,3 +10,6 @@ DerivedData/
 Screenshot*.png
 *.log
 log.txt
+
+# Release pipeline output
+build/
