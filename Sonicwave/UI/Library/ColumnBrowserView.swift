@@ -93,7 +93,8 @@ struct ColumnBrowserView: View {
             } else {
                 TrackTableView(tracks: filteredTracks,
                                columns: [.title, .artist, .album, .genre, .quality, .time],
-                               sortAutosaveKey: "browser")
+                               sortAutosaveKey: "browser",
+                               scrollAutosaveKey: "browser")
             }
         }
         .task {

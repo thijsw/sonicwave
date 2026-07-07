@@ -18,7 +18,9 @@ workflow.)
   (genre/artist/album), and per-view-kind table **sort** (key + direction,
   `trackSort.*`) persist via `@AppStorage`/UserDefaults (deliberately
   app-wide, so they restore regardless of the system's window-restoration
-  setting). Scroll position is not persisted. See `06`.
+  setting). Scroll position persists too for the stable library views
+  (Songs/Favorites/browser; content-specific views like album detail
+  deliberately don't). See `06`.
 
 ## Layout ✅
 
@@ -180,10 +182,16 @@ Menu bar via `Commands` (`SonicwaveCommands`):
 - Respect Light/Dark automatically; no hardcoded colors — use semantic/system
   colors and materials.
 
-## Accessibility 🚧 (labels done; deeper sweep deferred)
+## Accessibility ✅ (semantics verified via the AX API)
 
-- **VoiceOver** labels on icon-only controls are in place; a deeper
-  VoiceOver/traits sweep is the remaining M7 item.
+- **VoiceOver** labels on icon-only controls are in place; the custom
+  `SlimSlider` exposes a spoken value ("1:23 of 4:05" for scrubbers, percent
+  for volume) and increment/decrement adjustable actions; the track table's
+  favorite buttons expose state-aware labels ("Add to/Remove from
+  Favorites"). Verified by walking the app's AX tree.
+- Remaining by hand: a full VoiceOver listening pass, increased-contrast and
+  reduce-transparency spot checks (no hardcoded colors anywhere, so risk is
+  low).
 - **Dynamic Type**: use text styles, avoid fixed font sizes; verify table/
   header reflow.
 - **Increased contrast** and **reduce transparency/motion** honored (don't

@@ -15,6 +15,9 @@ struct TrackTableView: View {
     /// When set, the table's sort key/direction persist across launches under
     /// this name (one slot per view kind, e.g. "songs", "favorites").
     var sortAutosaveKey: String?
+    /// When set, the scroll offset persists too — only for views whose content
+    /// is stable across launches (see `MusicTrackTable.scrollAutosaveKey`).
+    var scrollAutosaveKey: String?
     var onRemoveFromPlaylist: ((IndexSet) -> Void)?
     var onMovePlaylist: ((IndexSet, Int) -> Void)?
 
@@ -38,6 +41,7 @@ struct TrackTableView: View {
             tracks: tracks,
             sortable: !isPlaylist,
             sortAutosaveKey: isPlaylist ? nil : sortAutosaveKey,
+            scrollAutosaveKey: isPlaylist ? nil : scrollAutosaveKey,
             columns: columns,
             nowPlayingID: player.currentTrack?.id,
             selection: $selection,

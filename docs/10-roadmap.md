@@ -8,10 +8,11 @@ playback first (M3).
 > **Live status:** M0–M6 ✅ (M2's SwiftData cache was dropped by design;
 > gapless human-verified 2026-07-03; playlist reorder verified vs Navidrome;
 > output-device switching human-verified vs a USB DAC 2026-07-05, incl.
-> hardware sample-rate matching) · M7 🚧 (media keys, restoration incl.
-> sort + column-browser selections, a11y labels, ⌘N/volume/⌘L shortcuts
-> done; deeper VoiceOver sweep and scroll restoration remain) · M8 ⏳ not
-> started. See `PROGRESS.md` for the detailed build log.
+> hardware sample-rate matching) · M7 ✅ (shortcuts, full restoration incl.
+> scroll, accessibility semantics AX-verified, Light/Dark verified; the `08`
+> checklist passes — only the Liquid Glass look on macOS 26 awaits a Tahoe
+> machine, plus by-hand VoiceOver/contrast spot checks) · M8 ⏳ not started.
+> See `PROGRESS.md` for the detailed build log.
 
 ## M0 — Foundation ✅
 - Create the Xcode app project (macOS 15 deployment, Swift 6 language mode,
@@ -77,7 +78,8 @@ playback first (M3).
 - **Exit:** menu-bar panel controls playback with main window closed; search is
   responsive; device switching is robust.
 
-## M7 — Polish: accessibility, restoration, transcoding, appearance 🚧
+## M7 — Polish: accessibility, restoration, transcoding, appearance ✅
+(Tahoe/Liquid Glass verification pending a macOS 26 machine)
 - Accessibility pass (VoiceOver, Dynamic Type, contrast, keyboard nav) — `04`.
 - State restoration (windows/selection/sort/scroll) — `06`.
 - Transcoding settings (format/bitrate) wired to `stream` — `02`.

@@ -17,7 +17,8 @@ struct SongsView: View {
             } else {
                 TrackTableView(tracks: library.songs,
                                columns: [.title, .artist, .album, .genre, .quality, .time],
-                               sortAutosaveKey: "songs")
+                               sortAutosaveKey: "songs",
+                               scrollAutosaveKey: "songs")
             }
         }
         .navigationTitle("Songs")

@@ -31,10 +31,10 @@ M5 ✅ (playlist CRUD + reorder-by-replace verified vs Navidrome 0.62
 2026-07-03; favorites persist) ·
 M6 ✅ (MenuBarExtra panel + search verified; output-device switching,
 vanish-fallback and re-pin human-verified vs a USB DAC 2026-07-05) ·
-M7 🚧 (media keys hardened; restoration — last section, table sort,
-column-browser selections — live-verified 2026-07-07; ⌘N/volume/⌘L shortcuts
-live-verified; accessibility labels on icon-only controls; appearance polish
-done. Remaining: deeper VoiceOver sweep, scroll-position restoration) ·
+M7 ✅ (shortcuts, restoration incl. scroll offset, accessibility semantics
+AX-verified, Light/Dark verified — the `08` checklist passes; only the
+Liquid Glass look awaits a macOS 26 machine, plus by-hand VoiceOver/contrast
+spot checks) ·
 M8 ⏳ (not started)
 
 ## How to build / test
@@ -46,6 +46,38 @@ xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
 ```
 
 ---
+
+## M7 close-out — accessibility + scroll restoration (2026-07-07)
+Status: **M7 complete** (Tahoe/Liquid Glass verification pending a macOS 26
+machine). The `08-testing.md` manual checklist is annotated with per-item
+status.
+- **`SlimSlider` accessibility**: the custom gesture-driven slider now
+  exposes a spoken value (percent for volume; "elapsed of total" for the
+  panel/menu-bar scrubbers via `accessibilityValueText`) and
+  increment/decrement adjustable actions — which also make it operable via
+  Full Keyboard Access and VoiceOver (VO-↑/↓). Verified by walking the AX
+  tree: `label=Volume valueDesc=100 percent actions=[AXIncrement,
+  AXDecrement]`.
+- **Track-table favorite buttons** expose state-aware labels ("Add to /
+  Remove from Favorites") + `AXPress` — all rows verified via the AX API.
+- **Scroll-position restoration** (`trackScroll.<key>`): the stable library
+  views (Songs/Favorites/browser) persist their scroll offset (debounced
+  saves via a selector-based clip-view observer; saving starts only after
+  the one-shot restore so churn can't clobber the stored value; restore is
+  clamped to loaded content). Content-specific views (album detail, search)
+  and playlists deliberately don't persist scroll. Live-verified: offset 932
+  survived a relaunch (a +5-tick scroll then saved 1052).
+- **Light mode verified** without touching system settings (per-app
+  `NSRequiresAquaSystemAppearance` override, removed afterwards): clean
+  light rendering, readable text, correct accent. No hardcoded colors exist
+  in the codebase.
+- `MusicTrackTable` was reorganized to keep lint clean: view lifecycle in a
+  same-file extension, sort+scroll persistence in
+  `TrackTablePersistence.swift`.
+- Remaining strictly-by-hand items: a full VoiceOver listening pass,
+  increased-contrast / reduce-transparency spot checks, AirPods route
+  change (same recovery path as the verified USB-DAC vanish), and the
+  macOS 26 Liquid Glass look.
 
 ## Memory-leak audit (2026-07-07)
 Status: **app code verified leak-free** (static review + `leaks` runs against

@@ -174,6 +174,9 @@ struct SlimSlider: View {
     var fill: Color = .accentColor
     var trackHeight: CGFloat = 3
     var thumbSize: CGFloat = 8
+    /// Spoken value for assistive tech (e.g. "1:23 of 4:05"); defaults to a
+    /// percentage of the range.
+    var accessibilityValueText: String?
     var onEditingChanged: (Bool) -> Void = { _ in }
 
     @State private var editing = false
@@ -211,6 +214,20 @@ struct SlimSlider: View {
                         onEditingChanged(false)
                     }
             )
+            // Custom gesture-driven control → expose slider semantics by hand:
+            // a value plus increment/decrement (also drives Full Keyboard Access).
+            .accessibilityElement()
+            .accessibilityValue(accessibilityValueText ?? "\(Int((fraction * 100).rounded())) percent")
+            .accessibilityAdjustableAction { direction in
+                let step = span / 20
+                onEditingChanged(true)
+                switch direction {
+                case .increment: value = min(range.upperBound, value + step)
+                case .decrement: value = max(range.lowerBound, value - step)
+                @unknown default: break
+                }
+                onEditingChanged(false)
+            }
         }
         // A taller invisible hit area than the thin visual track, so it's easy to
         // grab (and so drags near it don't fall through to the draggable bar).

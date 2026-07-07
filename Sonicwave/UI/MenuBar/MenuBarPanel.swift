@@ -31,7 +31,9 @@ struct MenuBarPanel: View {
                 range: 0...max(player.duration, 1),
                 fill: .accentColor,
                 trackHeight: 5,
-                thumbSize: 12
+                thumbSize: 12,
+                accessibilityValueText:
+                    "\(formatTime(scrubValue ?? player.position)) of \(formatTime(player.duration))"
             ) { editing in
                 if !editing, let value = scrubValue {
                     player.seek(to: value)

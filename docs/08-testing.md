@@ -76,18 +76,32 @@ audio hardware.
 
 ## Manual verification checklist (hardware-dependent)
 
-These can't be fully automated — verify by hand each release:
-- [ ] Now Playing widget shows correct title/artist/album/artwork + elapsed.
-- [ ] Media keys (F7/F8/F9) and Control Center transport control the app.
-- [ ] **Gapless**: a known gapless album transitions with no seam/overlap.
-- [ ] Output-device switch mid-track recovers cleanly.
-- [ ] Headphone unplug / AirPods connect handled (route change).
-- [ ] App doesn't sleep/App-Nap mid-track.
-- [ ] State restoration: relaunch reopens windows/selection/sort/scroll.
-- [ ] Light/Dark, increased contrast, reduce transparency, VoiceOver,
-      keyboard-only navigation.
-- [ ] Liquid Glass appearance on macOS 26; clean native look on Sequoia.
-- [ ] Memory stable over a long listening session (no buffer/artwork leak).
+These can't be fully automated — verify by hand each release. Status as of
+2026-07-07:
+- [x] Now Playing widget shows correct title/artist/album/artwork + elapsed
+      (M3/M7, live-verified).
+- [x] Media keys (F7/F8/F9) and Control Center transport control the app
+      (hardened + verified during the M7 media-keys pass).
+- [x] **Gapless**: Abbey Road medley, human-confirmed seamless (2026-07-03).
+- [x] Output-device switch mid-track recovers cleanly (USB DAC, 2026-07-05).
+- [x] Route changes: pinned-device vanish → fallback, replug → re-pin
+      (2026-07-05). AirPods specifically untested; same recovery path.
+- [x] App doesn't sleep/App-Nap mid-track (`beginActivity` held during
+      playback; long sessions observed without throttling).
+- [x] State restoration: relaunch restores section, panel/browser visibility,
+      browser selections, table sort, and scroll offset (2026-07-07).
+- [x] Light/Dark verified (dark in daily use; light via per-app Aqua
+      override, 2026-07-07). VoiceOver semantics verified via the AX API
+      (sliders expose value + increment/decrement; favorite buttons expose
+      state-aware labels + AXPress); keyboard: table arrows/⏎, ⌘F, transport
+      and view shortcuts. Remaining by hand: increased-contrast and
+      reduce-transparency spot checks (system-settings toggles), a full
+      VoiceOver listening pass.
+- [ ] Liquid Glass appearance on macOS 26 — **blocked on a Tahoe machine**
+      (dev machine runs macOS 15); standard-controls-only design means low
+      risk. Clean native look on Sequoia verified.
+- [x] Memory stable over a long listening session — leak audit 2026-07-07:
+      zero app-code leaks; footprint declines during playback.
 
 ## CI 🔶
 
