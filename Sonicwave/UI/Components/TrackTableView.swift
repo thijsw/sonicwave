@@ -12,6 +12,9 @@ struct TrackTableView: View {
     let tracks: [Song]
     /// Content columns to show, in order — specified explicitly per call site.
     let columns: [TrackColumn]
+    /// When set, the table's sort key/direction persist across launches under
+    /// this name (one slot per view kind, e.g. "songs", "favorites").
+    var sortAutosaveKey: String?
     var onRemoveFromPlaylist: ((IndexSet) -> Void)?
     var onMovePlaylist: ((IndexSet, Int) -> Void)?
 
@@ -34,6 +37,7 @@ struct TrackTableView: View {
         MusicTrackTable(
             tracks: tracks,
             sortable: !isPlaylist,
+            sortAutosaveKey: isPlaylist ? nil : sortAutosaveKey,
             columns: columns,
             nowPlayingID: player.currentTrack?.id,
             selection: $selection,

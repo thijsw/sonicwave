@@ -15,6 +15,11 @@ final class ConnectionModel {
 
     private(set) var state: State = .unconfigured
 
+    var isConnected: Bool {
+        if case .connected = state { return true }
+        return false
+    }
+
     // Editable form fields (bound by the Settings UI).
     var serverAddress: String = ""
     var username: String = ""

@@ -9,6 +9,13 @@ struct SonicwaveCommands: Commands {
     @AppStorage("showColumnBrowser") private var showColumnBrowser = true
 
     var body: some Commands {
+        // ⌘N creates a playlist, like Music/iTunes (replaces New Window).
+        CommandGroup(replacing: .newItem) {
+            Button("New Playlist…") { app.requestNewPlaylist() }
+                .keyboardShortcut("n", modifiers: .command)
+                .disabled(!app.connection.isConnected)
+        }
+
         CommandGroup(after: .sidebar) {
             Toggle("Show Now Playing", isOn: $showUpNext)
                 .keyboardShortcut("u", modifiers: .command)
@@ -35,6 +42,27 @@ struct SonicwaveCommands: Commands {
 
             Divider()
 
+            Button("Increase Volume") { app.player.volume = min(1, app.player.volume + 0.1) }
+                .keyboardShortcut(.upArrow, modifiers: .command)
+            Button("Decrease Volume") { app.player.volume = max(0, app.player.volume - 0.1) }
+                .keyboardShortcut(.downArrow, modifiers: .command)
+
+            Divider()
+
+            Button(currentTrackStarred ? "Remove from Favorites" : "Add to Favorites") {
+                guard let track = app.player.currentTrack else { return }
+                Task {
+                    // Make sure the starred list is loaded so the toggle is truthful.
+                    await app.library.loadStarredIfNeeded()
+                    let starred = app.library.starredSongs.contains { $0.id == track.id }
+                    await app.library.setStarred(!starred, songIds: [track.id])
+                }
+            }
+            .keyboardShortcut("l", modifiers: .command)
+            .disabled(app.player.currentTrack == nil || !app.connection.isConnected)
+
+            Divider()
+
             Picker("Repeat", selection: Binding(
                 get: { app.player.repeatMode },
                 set: { app.player.repeatMode = $0 }
@@ -49,5 +77,10 @@ struct SonicwaveCommands: Commands {
                 set: { app.player.shuffle = $0 }
             ))
         }
+    }
+
+    private var currentTrackStarred: Bool {
+        guard let track = app.player.currentTrack else { return false }
+        return app.library.starredSongs.contains { $0.id == track.id }
     }
 }

@@ -5,6 +5,7 @@ import SwiftUI
 struct SidebarView: View {
     @Binding var selection: SidebarSelection?
     @Environment(LibraryModel.self) private var library
+    @Environment(AppModel.self) private var app
 
     @State private var showNewPlaylist = false
     @State private var newName = ""
@@ -57,6 +58,11 @@ struct SidebarView: View {
         .toolbar(removing: .sidebarToggle)
         .task {
             await library.loadPlaylistsIfNeeded()
+        }
+        // File → New Playlist (⌘N) routes here via AppModel.
+        .onChange(of: app.newPlaylistRequests) {
+            newName = ""
+            showNewPlaylist = true
         }
         .alert("New Playlist", isPresented: $showNewPlaylist) {
             TextField("Name", text: $newName)

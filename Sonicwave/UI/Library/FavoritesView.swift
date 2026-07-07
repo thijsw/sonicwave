@@ -22,7 +22,8 @@ struct FavoritesView: View {
                     }
                     if !library.starredSongs.isEmpty {
                         TrackTableView(tracks: library.starredSongs,
-                                       columns: [.title, .artist, .album, .genre, .quality, .time])
+                                       columns: [.title, .artist, .album, .genre, .quality, .time],
+                                       sortAutosaveKey: "favorites")
                     } else {
                         Spacer()
                     }

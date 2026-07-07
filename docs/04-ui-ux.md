@@ -14,10 +14,11 @@ workflow.)
 - **MenuBarExtra** — Now Playing panel scene (below).
 - Support multiple windows, resizing, full-screen, Stage Manager, and
   **state restoration**. Implemented: selected sidebar section, Now Playing
-  panel visibility, and column-browser visibility persist via `@AppStorage`
-  (deliberately app-wide, so they restore regardless of the system's
-  window-restoration setting). Sort, column-browser *selections*, and scroll
-  position are not persisted — tracked under M7 polish. See `06`.
+  panel visibility, column-browser visibility, column-browser **selections**
+  (genre/artist/album), and per-view-kind table **sort** (key + direction,
+  `trackSort.*`) persist via `@AppStorage`/UserDefaults (deliberately
+  app-wide, so they restore regardless of the system's window-restoration
+  setting). Scroll position is not persisted. See `06`.
 
 ## Layout ✅
 
@@ -156,15 +157,17 @@ selectable lists; selections are part of restorable view state. Toggleable
 
 Menu bar via `Commands` (`SonicwaveCommands`):
 
-- **Controls:** Play/Pause (Space), Next (⌘→), Previous (⌘←), Repeat
-  (Off/All/One picker), Shuffle toggle — disabled when nothing is loaded.
+- **File:** New Playlist… (⌘N, replaces New Window — like Music), routed to
+  the sidebar's New Playlist prompt via `AppModel.requestNewPlaylist()`.
+- **Controls:** Play/Pause (Space), Next (⌘→), Previous (⌘←),
+  Increase/Decrease Volume (⌘↑/⌘↓), Add/Remove Favorites for the current
+  track (⌘L, title reflects its starred state), Repeat (Off/All/One picker),
+  Shuffle toggle — playback items disabled when nothing is loaded.
 - **View:** Show Now Playing (⌘U, disabled when nothing plays/queued), Show
   Column Browser (⌥⌘B), plus the standard sidebar toggle.
 - **Find:** ⌘F focuses the sidebar search field (a hidden button —
   `.searchable` has no command-level focus hook).
-- **File / Edit / Window / Help:** system defaults. New Playlist lives in the
-  sidebar's **+** button and the track context menu (no ⌘N command); volume
-  and star shortcuts are not bound — deferred to M7 polish.
+- **Edit / Window / Help:** system defaults.
 
 ## Liquid Glass & appearance ✅
 

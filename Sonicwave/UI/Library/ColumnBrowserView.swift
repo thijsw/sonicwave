@@ -7,10 +7,42 @@ struct ColumnBrowserView: View {
     @Environment(LibraryModel.self) private var library
 
     @State private var songs: [Song] = []          // songs for the selected genre
-    @State private var selectedGenre: String?
-    @State private var selectedArtist: String?
-    @State private var selectedAlbum: String?
     @State private var isLoading = false
+
+    // Pane selections persist across launches ("" = nothing selected). The
+    // cascade (genre resets artist+album, artist resets album) lives in the
+    // binding setters so restore doesn't re-trigger it.
+    @AppStorage("browser.genre") private var storedGenre = ""
+    @AppStorage("browser.artist") private var storedArtist = ""
+    @AppStorage("browser.album") private var storedAlbum = ""
+
+    private var selectedGenre: String? { storedGenre.isEmpty ? nil : storedGenre }
+    private var selectedArtist: String? { storedArtist.isEmpty ? nil : storedArtist }
+    private var selectedAlbum: String? { storedAlbum.isEmpty ? nil : storedAlbum }
+
+    private var genreSelection: Binding<String?> {
+        Binding(
+            get: { selectedGenre },
+            set: { genre in
+                storedGenre = genre ?? ""
+                storedArtist = ""
+                storedAlbum = ""
+                Task { await loadGenre(genre) }
+            })
+    }
+
+    private var artistSelection: Binding<String?> {
+        Binding(
+            get: { selectedArtist },
+            set: { artist in
+                storedArtist = artist ?? ""
+                storedAlbum = ""
+            })
+    }
+
+    private var albumSelection: Binding<String?> {
+        Binding(get: { selectedAlbum }, set: { storedAlbum = $0 ?? "" })
+    }
 
     /// With no genre selected, browse the all-songs sample; otherwise the genre's
     /// songs. (Subsonic has no "all songs" endpoint, so the base is a sample.)
@@ -39,17 +71,17 @@ struct ColumnBrowserView: View {
             HStack(spacing: 0) {
                 pane(title: "Genre",
                      items: library.genres.map(\.value),
-                     selection: $selectedGenre,
+                     selection: genreSelection,
                      allLabel: "All Genres")
                 Divider()
                 pane(title: "Artist",
                      items: artists,
-                     selection: $selectedArtist,
+                     selection: artistSelection,
                      allLabel: "All Artists")
                 Divider()
                 pane(title: "Album",
                      items: albums,
-                     selection: $selectedAlbum,
+                     selection: albumSelection,
                      allLabel: "All Albums")
             }
             .frame(height: 200)
@@ -60,19 +92,19 @@ struct ColumnBrowserView: View {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 TrackTableView(tracks: filteredTracks,
-                               columns: [.title, .artist, .album, .genre, .quality, .time])
+                               columns: [.title, .artist, .album, .genre, .quality, .time],
+                               sortAutosaveKey: "browser")
             }
         }
         .task {
             await library.loadSongsIfNeeded()
             await library.loadGenresIfNeeded()
+            // Restore: a persisted genre needs its songs loaded (without the
+            // cascade — the restored artist/album selections must survive).
+            if selectedGenre != nil, songs.isEmpty {
+                await loadGenre(selectedGenre)
+            }
         }
-        .onChange(of: selectedGenre) { _, genre in
-            selectedArtist = nil
-            selectedAlbum = nil
-            Task { await loadGenre(genre) }
-        }
-        .onChange(of: selectedArtist) { selectedAlbum = nil }
     }
 
     @ViewBuilder

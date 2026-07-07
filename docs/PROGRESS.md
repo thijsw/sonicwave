@@ -31,10 +31,10 @@ M5 ✅ (playlist CRUD + reorder-by-replace verified vs Navidrome 0.62
 2026-07-03; favorites persist) ·
 M6 ✅ (MenuBarExtra panel + search verified; output-device switching,
 vanish-fallback and re-pin human-verified vs a USB DAC 2026-07-05) ·
-M7 🚧 (media keys hardened; last-section restoration verified; accessibility
-labels on icon-only controls; appearance polish — selected-row contrast, default
-window size, empty-Songs fix — done. Remaining: deeper VoiceOver sweep,
-sort/scroll restoration, volume/star shortcuts) ·
+M7 🚧 (media keys hardened; restoration — last section, table sort,
+column-browser selections — live-verified 2026-07-07; ⌘N/volume/⌘L shortcuts
+live-verified; accessibility labels on icon-only controls; appearance polish
+done. Remaining: deeper VoiceOver sweep, scroll-position restoration) ·
 M8 ⏳ (not started)
 
 ## How to build / test
@@ -46,6 +46,29 @@ xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
 ```
 
 ---
+
+## M7 quick wins — shortcuts + restoration (2026-07-07)
+Status: **done & live-verified by driving the app (computer-use).**
+- **File → New Playlist… (⌘N)** replaces New Window (like Music); routed to
+  the sidebar's existing New Playlist prompt via an observable request
+  counter on `AppModel`. Disabled when disconnected.
+- **Controls gains** Increase/Decrease Volume (⌘↑/⌘↓, ±0.1) and a current-track
+  favorite toggle (⌘L) whose title tracks the starred state ("Add to/Remove
+  from Favorites"); it loads the starred list first so the toggle is truthful.
+- **Table-sort persistence**: `MusicTrackTable` takes a `sortAutosaveKey`
+  (one slot per view kind: songs/favorites/browser/album/search); the sort
+  key + direction persist to UserDefaults (`trackSort.<key>`) and are restored
+  on creation — only for columns that still exist. Playlists are exempt
+  (stored order is the reorder surface).
+- **Column-browser selections persist** (`browser.genre/artist/album` via
+  `@AppStorage`); the reset cascade moved into the binding setters so a
+  restore doesn't clear the restored artist/album, and the genre's songs are
+  reloaded on appearance.
+- Verified live: ⌘N opened the prompt; ⌘↓/⌘↑ moved the toolbar volume
+  slider; ⌘L unstarred the playing track (row left Favorites) and re-starred
+  it; Rock → Jimi Hendrix + Title-sort survived a full quit/relaunch
+  (defaults inspected: `trackSort.browser = "title|asc"`, flips to desc on
+  re-click); playlist view stayed in stored order with no sort applied.
 
 ## Tooling — SwiftLint (2026-07-06)
 Status: **done; lint clean, build warnings unchanged, all 66 tests green.**

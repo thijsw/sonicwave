@@ -22,7 +22,8 @@ struct AlbumDetailView: View {
         VStack(spacing: 0) {
             header
             Divider()
-            TrackTableView(tracks: tracks, columns: [.title, .artist, .genre, .quality, .time])
+            TrackTableView(tracks: tracks, columns: [.title, .artist, .genre, .quality, .time],
+                           sortAutosaveKey: "album")
         }
         .task(id: album.id) {
             tracks = await library.songs(forAlbum: album.id)

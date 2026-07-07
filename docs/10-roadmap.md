@@ -8,10 +8,10 @@ playback first (M3).
 > **Live status:** M0–M6 ✅ (M2's SwiftData cache was dropped by design;
 > gapless human-verified 2026-07-03; playlist reorder verified vs Navidrome;
 > output-device switching human-verified vs a USB DAC 2026-07-05, incl.
-> hardware sample-rate matching) · M7 🚧 (media keys, section restoration,
-> a11y labels done; deeper VoiceOver sweep, sort/scroll restoration,
-> volume/star shortcuts remain) · M8 ⏳ not started. See `PROGRESS.md` for
-> the detailed build log.
+> hardware sample-rate matching) · M7 🚧 (media keys, restoration incl.
+> sort + column-browser selections, a11y labels, ⌘N/volume/⌘L shortcuts
+> done; deeper VoiceOver sweep and scroll restoration remain) · M8 ⏳ not
+> started. See `PROGRESS.md` for the detailed build log.
 
 ## M0 — Foundation ✅
 - Create the Xcode app project (macOS 15 deployment, Swift 6 language mode,

@@ -16,6 +16,14 @@ final class AppModel {
     /// Server connection + authentication state.
     let connection: ConnectionModel
 
+    /// Bumped by File → New Playlist (⌘N); the sidebar observes it and opens
+    /// its New Playlist prompt (a counter so repeat requests always fire).
+    private(set) var newPlaylistRequests = 0
+
+    func requestNewPlaylist() {
+        newPlaylistRequests += 1
+    }
+
     // Services (not observed directly by views).
     let credentials: CredentialStore
     let client: SubsonicClient

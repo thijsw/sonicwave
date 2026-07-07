@@ -79,6 +79,9 @@ enum TrackColumn {
 struct MusicTrackTable: NSViewRepresentable {
     var tracks: [Song]
     var sortable: Bool = true
+    /// When set, the sort key/direction persist to UserDefaults under this
+    /// name and are restored on creation (one slot per view kind).
+    var sortAutosaveKey: String?
     /// Content columns to show, in order. Caller decides explicitly.
     var columns: [TrackColumn]
     var nowPlayingID: String?
@@ -131,6 +134,14 @@ struct MusicTrackTable: NSViewRepresentable {
         // Flexible columns absorb extra width so rows/stripes fill edge-to-edge.
         table.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
 
+        // Restore a persisted sort — only for a column that still exists.
+        if sortable, let descriptor = context.coordinator.persistedSortDescriptor(),
+           table.tableColumns.contains(where: { $0.identifier.rawValue == descriptor.key }) {
+            context.coordinator.restoringSort = true
+            table.sortDescriptors = [descriptor]
+            context.coordinator.restoringSort = false
+        }
+
         let scroll = NSScrollView()
         scroll.documentView = table
         scroll.hasVerticalScroller = true
@@ -159,6 +170,9 @@ struct MusicTrackTable: NSViewRepresentable {
         var parent: MusicTrackTable
         weak var table: NSTableView?
         var updatingSelection = false
+        /// Set while makeNSView applies the persisted sort, so the delegate
+        /// callback doesn't clear the selection binding mid view-update.
+        var restoringSort = false
         private(set) var displayed: [Song] = []
         private var sortKey: String?
         private var ascending = true
@@ -215,8 +229,10 @@ struct MusicTrackTable: NSViewRepresentable {
             } else {
                 sortKey = nil
             }
+            persistSort(key: sortKey, ascending: ascending)
             signature = [] // force rebuild
             reloadIfNeeded()
+            guard !restoringSort else { return }
             parent.selection = []
             tableView.deselectAll(nil)
         }
@@ -342,6 +358,31 @@ struct MusicTrackTable: NSViewRepresentable {
 
         func playSelected() {
             if let row = table?.selectedRowIndexes.min() { parent.onPlay(displayed, row) }
+        }
+    }
+}
+
+// MARK: - Sort persistence
+
+extension MusicTrackTable.Coordinator {
+    private var sortDefaultsKey: String? {
+        parent.sortAutosaveKey.map { "trackSort.\($0)" }
+    }
+
+    func persistedSortDescriptor() -> NSSortDescriptor? {
+        guard let key = sortDefaultsKey,
+              let stored = UserDefaults.standard.string(forKey: key) else { return nil }
+        let parts = stored.split(separator: "|")
+        guard parts.count == 2 else { return nil }
+        return NSSortDescriptor(key: String(parts[0]), ascending: parts[1] == "asc")
+    }
+
+    func persistSort(key sortKey: String?, ascending: Bool) {
+        guard let key = sortDefaultsKey else { return }
+        if let sortKey {
+            UserDefaults.standard.set("\(sortKey)|\(ascending ? "asc" : "desc")", forKey: key)
+        } else {
+            UserDefaults.standard.removeObject(forKey: key)
         }
     }
 }
