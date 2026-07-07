@@ -234,7 +234,7 @@ extension PlaybackService {
             url = try await client.streamURL(songId: request.songId, format: prefs.format,
                                              maxBitRate: prefs.maxBitRate, timeOffset: serverOffset)
         } catch {
-            if gen == generation { emit(.failed((error as? SubsonicError)?.userMessage ?? error.localizedDescription)) }
+            if gen == generation { emit(.failed(error.userMessage)) }
             return
         }
 
@@ -276,7 +276,7 @@ extension PlaybackService {
         }
         source.finish()
         _ = await consume.value
-        await decodeComplete(spanArrayIndex: spanArrayIndex, index: request.index, gen: gen)
+        decodeComplete(spanArrayIndex: spanArrayIndex, index: request.index, gen: gen)
     }
 
     // MARK: - Bounded read-ahead

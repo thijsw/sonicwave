@@ -9,6 +9,13 @@ import os
 /// Used only from within the `PlaybackService` actor: `parse(_:)`/`finish()` are
 /// called on the actor, and the AudioFileStream C callbacks fire synchronously
 /// inside `parse`, so all mutable state is touched on a single executor.
+/// One-shot flag for `AVAudioConverter` input blocks. The block type is
+/// `@Sendable` in the SDK, but `convert(to:error:withInputFrom:)` invokes it
+/// synchronously on the calling thread, so unchecked access is safe.
+private final class InputFlag: @unchecked Sendable {
+    var raised = false
+}
+
 final class ProgressiveAudioSource: AudioStreamSource {
     let buffers: AsyncStream<SendablePCMBuffer>
     private let continuation: AsyncStream<SendablePCMBuffer>.Continuation
@@ -92,11 +99,11 @@ final class ProgressiveAudioSource: AudioStreamSource {
     private func flushDecoder() {
         guard let converter else { return }
         guard let pcm = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: 16_384) else { return }
-        var ended = false
+        let ended = InputFlag()
         var error: NSError?
         let status = converter.convert(to: pcm, error: &error) { _, outStatus in
-            if ended { outStatus.pointee = .noDataNow; return nil }
-            ended = true
+            if ended.raised { outStatus.pointee = .noDataNow; return nil }
+            ended.raised = true
             outStatus.pointee = .endOfStream
             return nil
         }
@@ -276,14 +283,14 @@ final class ProgressiveAudioSource: AudioStreamSource {
         let capacity = AVAudioFrameCount(estFrames * ratio) + 16_384
         guard let pcm = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: capacity) else { return }
 
-        var provided = false
+        let provided = InputFlag()
         var error: NSError?
         let status = converter.convert(to: pcm, error: &error) { _, outStatus in
-            if provided {
+            if provided.raised {
                 outStatus.pointee = .noDataNow
                 return nil
             }
-            provided = true
+            provided.raised = true
             outStatus.pointee = .haveData
             return inputBuffer
         }

@@ -93,10 +93,8 @@ final class ConnectionModel {
         do {
             let info = try await client.testConnection(candidate)
             state = .connected(info)
-        } catch let error as SubsonicError {
-            state = .failed(error.userMessage)
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(error.userMessage)
         }
     }
 
@@ -128,10 +126,8 @@ final class ConnectionModel {
         do {
             let info = try await client.ping()
             state = .connected(info)
-        } catch let error as SubsonicError {
-            state = .failed(error.userMessage)
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(error.userMessage)
         }
     }
 

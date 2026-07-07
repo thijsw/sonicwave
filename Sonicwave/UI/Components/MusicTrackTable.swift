@@ -118,7 +118,7 @@ struct MusicTrackTable: NSViewRepresentable {
             col.minWidth = min
             col.maxWidth = max
             // Match the header's alignment to the cell content (e.g. right-aligned Time).
-            (col.headerCell as? NSTableHeaderCell)?.alignment = alignRight ? .right : .left
+            col.headerCell.alignment = alignRight ? .right : .left
             if sortable, let sortKey {
                 col.sortDescriptorPrototype = NSSortDescriptor(key: sortKey, ascending: true)
             }
@@ -166,6 +166,10 @@ struct MusicTrackTable: NSViewRepresentable {
         }
     }
 
+    // @MainActor matches reality (AppKit calls the delegate/datasource and
+    // action selectors on the main thread) and lets the compiler verify the
+    // AppKit calls inside.
+    @MainActor
     final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate {
         var parent: MusicTrackTable
         weak var table: NSTableView?

@@ -450,10 +450,11 @@ Status: **UI + data flow working in-memory; SwiftData cache not yet wired.**
   editing/reorder + favorites in M5; Now Playing center / media keys in M3.)
 
 ## Verification status
-- ✅ `xcodebuild build` succeeds (Debug, arm64, macOS 15 target). A stable
-  baseline of ~29 compiler warnings exists (Sendable-capture and
-  always-true-cast diagnostics, mostly AppKit/concurrency edges); tracked, not
-  growing (verified against the baseline during the 2026-07-06 lint pass).
+- ✅ `xcodebuild build` succeeds (Debug, arm64, macOS 15 target) with
+  **zero compiler warnings** (clean build; the former ~29-warning baseline was
+  eliminated 2026-07-07 — always-true casts collapsed via typed throws,
+  `MusicTrackTable.Coordinator` made `@MainActor`, converter input flags
+  boxed, date decoding moved to Sendable `Date.ISO8601FormatStyle`).
 - ✅ `xcodebuild test` — full suite green (**TEST SUCCEEDED**, 66 tests,
   0 failures).
 

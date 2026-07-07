@@ -81,12 +81,9 @@ final class LibraryModel {
             albumOffset += page.count
             albumsExhausted = page.count < Self.pageSize
             albumsState = .loaded(())
-        } catch let error as SubsonicError {
+        } catch {
             albumsState = .failed(error.userMessage)
             Self.log.error("album load failed: \(error.userMessage)")
-        } catch {
-            albumsState = .failed(error.localizedDescription)
-            Self.log.error("album load failed: \(error.localizedDescription)")
         }
     }
 
@@ -110,10 +107,8 @@ final class LibraryModel {
             let body = try await client.send(.artists, as: ArtistsBody.self)
             artists = (body.artists.index ?? []).flatMap { $0.artist ?? [] }
             artistsState = .loaded(())
-        } catch let error as SubsonicError {
-            artistsState = .failed(error.userMessage)
         } catch {
-            artistsState = .failed(error.localizedDescription)
+            artistsState = .failed(error.userMessage)
         }
     }
 
@@ -127,10 +122,8 @@ final class LibraryModel {
             let body = try await client.send(.randomSongs(size: 500), as: RandomSongsBody.self)
             songs = body.randomSongs.song ?? []
             songsState = .loaded(())
-        } catch let error as SubsonicError {
-            songsState = .failed(error.userMessage)
         } catch {
-            songsState = .failed(error.localizedDescription)
+            songsState = .failed(error.userMessage)
         }
     }
 

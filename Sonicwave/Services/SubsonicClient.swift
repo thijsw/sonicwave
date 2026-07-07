@@ -198,14 +198,13 @@ actor SubsonicClient {
 
     static func makeDecoder() -> JSONDecoder {
         let decoder = JSONDecoder()
-        let withFraction = ISO8601DateFormatter()
-        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let plain = ISO8601DateFormatter()
-        plain.formatOptions = [.withInternetDateTime]
+        // Value-type format styles (Sendable), unlike ISO8601DateFormatter.
+        let withFraction = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+        let plain = Date.ISO8601FormatStyle()
         decoder.dateDecodingStrategy = .custom { dateDecoder in
             let container = try dateDecoder.singleValueContainer()
             let string = try container.decode(String.self)
-            if let date = withFraction.date(from: string) ?? plain.date(from: string) {
+            if let date = (try? withFraction.parse(string)) ?? (try? plain.parse(string)) {
                 return date
             }
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Bad date: \(string)")
