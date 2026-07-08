@@ -6,8 +6,7 @@
 
 The interaction design iTunes got right — a dense sortable track list, a
 column browser, Up Next, fast search — rebuilt as a modern, restrained
-SwiftUI app that feels like it shipped with macOS. Streaming-only,
-audiophile-grade playback, no Electron in sight.
+Mac app. Streaming-only, audiophile-grade playback, no Electron in sight.
 
 ![Platform](https://img.shields.io/badge/platform-macOS%2015%2B-blue)
 ![Swift](https://img.shields.io/badge/Swift-6.2-orange)
@@ -20,123 +19,77 @@ audiophile-grade playback, no Electron in sight.
 ---
 
 Sonicwave connects to a self-hosted [OpenSubsonic](https://opensubsonic.netlify.app/)
-library ([Navidrome](https://www.navidrome.org/) is the reference server) and
-streams it through a hand-built `AVAudioEngine` pipeline. It's for people who
-run their own music server and want a real Mac app — keyboard-friendly,
-low-footprint, HIG-faithful — instead of a browser tab.
-
-## Highlights
-
-### 🎧 Playback that takes audio seriously
-- **True gapless playback.** Every track decodes into one continuous timeline
-  on a single player node — album transitions are seamless by construction,
-  not by crossfade. Verified by ear on the Abbey Road medley.
-- **Hardware sample-rate matching** (Audirvana/Roon-style, on by default):
-  the output device's clock is switched to each track's native rate, so
-  nothing is resampled between the file and your DAC.
-- **Progressive streaming decode.** Audio File Stream Services +
-  `AVAudioConverter` turn the HTTP stream into PCM as bytes arrive — playback
-  starts fast, and read-ahead is throttled to ~15 s so memory stays flat
-  (MP3, FLAC, AAC/ADTS, WAV, AIFF, …).
-- **Robust output routing.** Pick any output device; mid-track switches,
-  a vanished USB DAC, or a replug all recover automatically at the playhead.
-  Sonicwave never touches your system-default device.
-- **Sample-precise seeking**, server-side transcoding (format + max bitrate)
-  if you want it, and idle-sleep/App Nap prevention while playing.
-
-### 📚 A library you can actually drive
-- **Dense, sortable track table** (real AppKit under the hood): edge-to-edge
-  stripes, double-click or ⏎ to play, ⌥-double-click to queue next,
-  multi-select, drag to playlists, click-to-sort headers.
-- **Column browser** — filter Genre → Artist → Album, just like the classic
-  iTunes pattern (⌥⌘B).
-- **Quality badges** per track ("FLAC", "320 kbps"); sorting ranks lossless
-  above any lossy bitrate.
-- **Global search** with instant artist/album shelves and song results (⌘F).
-- **Server playlists, fully round-trip:** create, rename, delete, reorder
-  (Move to Top/Up/Down/Bottom), add/remove — all persisted to the server.
-- **Favorites everywhere:** a ★ column with optimistic toggling, album-level
-  stars, a Favorites section.
-
-### 🖥 A proper Mac citizen
-- **Now Playing toolbar** with an iTunes-style "LCD": artwork, track info,
-  elapsed/total, and a hairline progress bar; click it to open the
-  **Now Playing panel** (hero artwork, scrubber, transport, reorderable
-  Up Next queue).
-- **Menu-bar player** (`MenuBarExtra`): full transport and scrubbing from the
-  menu bar, even with the main window closed.
-- **System integration done right:** Control Center / Now Playing widget,
-  media keys (F7/F8/F9), `MPRemoteCommandCenter` scrubbing, live artwork.
-- **Native everything:** Light/Dark, keyboard shortcuts for transport and
-  views, state restoration, App Sandbox with a single entitlement
-  (outgoing network), credentials in the Keychain.
-
-## Requirements
-
-- **macOS 15 Sequoia** or later
-- An **OpenSubsonic-compatible server** (Navidrome, Gonic, LMS, Astiga, …)
-  reachable over HTTP(S)
-- Xcode 26 / Swift 6.2 to build from source
+library ([Navidrome](https://www.navidrome.org/) is the reference server).
+It's for people who run their own music server and want a real Mac app —
+keyboard-friendly, low-footprint, native — instead of a browser tab.
 
 ## Download
 
 Grab `Sonicwave-x.y.z.zip` from the
 [latest release](https://github.com/thijsw/sonicwave/releases/latest), unzip,
-and drop `Sonicwave.app` into `/Applications`. Builds are Developer
-ID-signed, hardened-runtime, and **notarized by Apple** — they launch
-without Gatekeeper warnings.
-
-## Building
-
-```sh
-git clone https://github.com/thijsw/sonicwave.git
-cd sonicwave
-xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
-  -destination 'platform=macOS' build
-```
-
-Or open `Sonicwave.xcodeproj` in Xcode and hit Run.
+and drop `Sonicwave.app` into `/Applications`. Builds are signed and
+**notarized by Apple** — they launch without Gatekeeper warnings.
 
 **First launch:** open **Settings → Connection** (⌘,), enter your server
-address, username, and password (or an OpenSubsonic API key), and hit
-**Test Connection** → **Save & Connect**. Sonicwave normalizes pasted browser
-URLs (it strips Navidrome's `/app` suffix for you), and your credentials go
-straight to the Keychain — the classic token+salt scheme means your password
-never travels in a URL.
+address and credentials, hit **Test Connection** → **Save & Connect**.
+Credentials go straight to the Keychain; your password never travels in a URL.
 
-## Under the hood
+## Highlights
 
-Swift 6 strict concurrency, Observation, and **zero third-party
-dependencies** — every capability maps to a first-party framework:
+**🎧 Serious about audio**
+- **True gapless playback** — album transitions are seamless by construction.
+- **Hardware sample-rate matching** (Audirvana/Roon-style, on by default):
+  your DAC runs at each track's native rate, nothing gets resampled.
+- **Streaming decode** of MP3, FLAC, AAC, WAV, AIFF and more — playback
+  starts fast and memory stays flat.
+- **Robust output routing**: pick any output device; unplugging or replugging
+  a USB DAC mid-track recovers automatically, and your system-default device
+  is never touched.
 
-| Layer | What it is |
-| --- | --- |
-| UI | SwiftUI (`NavigationSplitView`, `MenuBarExtra`, inspector panel) with a thin AppKit `NSTableView` core for the track list |
-| State | `@Observable` models on the main actor; one `PlayerModel` is the single source of truth for everything "now playing" |
-| Playback | `PlaybackService` actor owning `AVAudioEngine`; progressive decode via AudioFileStream + `AVAudioConverter`; Core Audio device control |
-| Networking | `SubsonicClient` actor over `URLSession` with typed throws (`SubsonicError`) |
-| Caching | Two-tier (memory + disk) artwork cache, scoped per server; library metadata stays in-memory — the app is streaming-first by design |
+**📚 A library you can drive**
+- Dense, sortable track table: double-click or ⏎ to play, ⌥-double-click to
+  queue next, multi-select, drag to playlists.
+- Column browser (Genre → Artist → Album), global search (⌘F), quality
+  badges ("FLAC", "320 kbps") with lossless-first sorting.
+- Server playlists round-trip fully: create, rename, reorder, delete.
+- Favorites everywhere, with a ★ column.
 
-The `docs/` directory holds the full design docs — architecture, the playback
-engine deep-dive (including the gapless and crackle-forensics war stories),
-API layer, UI/UX rationale, and the build log (`docs/PROGRESS.md`). The unit
-suite (Swift Testing, 66 tests) runs hermetically; an opt-in live suite
-exercises a real server when `SONICWAVE_HOST/USER/PASS` are set.
+**🖥 A proper Mac citizen**
+- iTunes-style "LCD" in the toolbar; Now Playing panel with a reorderable
+  Up Next queue; a menu-bar player that works with the window closed.
+- Media keys, Control Center / Now Playing widget, live artwork.
+- Light/Dark, full keyboard shortcuts, VoiceOver support, state restoration,
+  sandboxed with a single entitlement (outgoing network).
 
-```sh
-xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
-  -destination 'platform=macOS' test
-```
+## Requirements
+
+- **macOS 15 Sequoia** or later
+- An **OpenSubsonic-compatible server** (Navidrome, Gonic, LMS, Astiga, …)
 
 ## Status
 
-Sonicwave is feature-complete for v1 and in the final polish phase
-(accessibility sweep, deeper state restoration) ahead of Mac App Store
-distribution. See [`docs/10-roadmap.md`](docs/10-roadmap.md) for milestone
-status and [`docs/PROGRESS.md`](docs/PROGRESS.md) for the detailed build log.
+v0.1.0 is out — feature-complete, with Mac App Store distribution in
+progress. Deliberately out of scope for v1: offline downloads, scrobbling,
+smart playlists, multi-server profiles, tag editing.
 
-**Deliberately out of scope for v1:** offline downloads, scrobbling, smart
-playlists, multi-server profiles, tag editing.
+## For developers
+
+Swift 6 (strict concurrency), SwiftUI with an AppKit core for the track
+table, and **zero third-party dependencies**. Build with Xcode 26, or:
+
+```sh
+git clone https://github.com/thijsw/sonicwave.git && cd sonicwave
+xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
+  -destination 'platform=macOS' build   # or: test
+```
+
+The [`docs/`](docs/) directory holds the full design docs — architecture,
+the playback-engine deep-dive (gapless + crackle forensics), API layer,
+UI/UX rationale — and the running build log
+([`docs/PROGRESS.md`](docs/PROGRESS.md)). The test suite runs hermetically;
+an opt-in live suite exercises a real server via `SONICWAVE_HOST/USER/PASS`
+env vars. Releases ship through [`scripts/release.sh`](scripts/release.sh)
+(archive → notarize → staple) and [`scripts/publish.sh`](scripts/publish.sh).
 
 ## License
 
