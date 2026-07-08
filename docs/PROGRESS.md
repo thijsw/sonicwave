@@ -50,6 +50,33 @@ xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
 
 ---
 
+## AirPlay Tier 1 (2026-07-08)
+Status: **code complete, build/lint clean, UI verified; live end-to-end
+deferred** (needs a real AirPlay 2 receiver — none available at the time).
+- Scope (Tier 1): treat AirPlay endpoints as regular Core Audio output
+  devices — no private sender API, no in-app discovery. `AudioDevice` gained
+  `isAirPlay` (via `kAudioDevicePropertyTransportType ==
+  kAudioDeviceTransportTypeAirPlay`); the Settings picker groups AirPlay
+  routes after regular devices with an `airplay.audio` label;
+  `matchDeviceRateIfEnabled` skips AirPlay transports (fixed network clock —
+  nominal-rate pokes are useless-to-glitchy; macOS resamples instead).
+- **Empirical constraint (probed, not assumed):** an AirPlay receiver only
+  exists as a Core Audio device *while the system is connected to it* —
+  Control Center owns discovery/connection. A shairport-sync fake receiver
+  ("Sonicwave Test Speaker") advertised fine on Bonjour (`_raop._tcp`) but
+  never appeared in the device list, and *also never appeared in Control
+  Center*: the Homebrew build is **AirPlay 1 only**, and macOS's system
+  output list shows **AirPlay 2 receivers only** (AirPlay 1 shows in
+  Music.app's private picker alone). An AirPlay 2 shairport-sync needs a
+  from-source build + root nqptp daemon — not attempted.
+- Verified so far: build + SwiftLint clean; Settings → Playback picker
+  correct pre-connection (regular devices, remembered-disconnected entry, no
+  phantom AirPlay section).
+- **⏳ Pending live test** (any AirPlay 2 receiver, e.g. another Mac with
+  AirPlay Receiver enabled, HomePod, Apple TV): connect via Control Center →
+  device appears with AirPlay transport → shows under the picker's AirPlay
+  group → pin in-app → audio arrives → log shows no rate-match attempt.
+
 ## Toolbar/panel stability fixes (2026-07-08)
 Status: **done & frame-verified** (screen recordings analyzed per frame;
 note: computer-use synthetic input does NOT deliver while `screencapture -V`

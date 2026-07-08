@@ -100,8 +100,14 @@ private struct PlaybackSettingsView: View {
             Section("Output") {
                 Picker("Output Device", selection: $outputDeviceUID) {
                     Text("System Default").tag("")
-                    ForEach(devices) { device in
+                    ForEach(devices.filter { !$0.isAirPlay }) { device in
                         Text(device.name).tag(device.uid)
+                    }
+                    // AirPlay routes appear once the system is connected to
+                    // them — Control Center owns discovery/connection, so an
+                    // unconnected receiver has no audio device to list.
+                    ForEach(devices.filter(\.isAirPlay)) { device in
+                        Label(device.name, systemImage: "airplay.audio").tag(device.uid)
                     }
                     if selectionDisconnected {
                         Text("\(outputDeviceName.isEmpty ? "Selected device" : outputDeviceName) (disconnected)")

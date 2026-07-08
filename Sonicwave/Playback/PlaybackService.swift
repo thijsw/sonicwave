@@ -338,6 +338,10 @@ extension PlaybackService {
     /// recoveries keep the match.
     private func matchDeviceRateIfEnabled() {
         guard matchRateEnabled, let dev = appliedDeviceID else { return }
+        // AirPlay endpoints run a fixed network clock (44.1 kHz for classic
+        // AirPlay); poking their nominal rate at best does nothing and at
+        // worst glitches the stream. Let macOS resample for those.
+        guard AudioOutputDevices.transportType(dev) != kAudioDeviceTransportTypeAirPlay else { return }
         let target = canonicalFormat.sampleRate
         guard let best = AudioOutputDevices.bestSupportedRate(for: target, on: dev),
               let current = AudioOutputDevices.nominalSampleRate(of: dev),

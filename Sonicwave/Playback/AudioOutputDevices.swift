@@ -7,6 +7,11 @@ struct AudioDevice: Identifiable, Hashable, Sendable {
     let id: AudioDeviceID
     let uid: String
     let name: String
+    /// Core Audio transport-type AirPlay. Note: an AirPlay receiver only
+    /// exists as a Core Audio device while the system is connected to it
+    /// (first connection happens via Control Center — there is no public
+    /// sender API); once present, it's pickable and routable like any other.
+    let isAirPlay: Bool
 }
 
 /// Fires `onChange` whenever the system's audio device list changes (device
@@ -147,7 +152,20 @@ enum AudioOutputDevices {
     private static func device(for id: AudioDeviceID) -> AudioDevice? {
         guard let name = string(id, kAudioObjectPropertyName),
               let uid = string(id, kAudioDevicePropertyDeviceUID) else { return nil }
-        return AudioDevice(id: id, uid: uid, name: name)
+        return AudioDevice(id: id, uid: uid, name: name,
+                           isAirPlay: transportType(id) == kAudioDeviceTransportTypeAirPlay)
+    }
+
+    /// The device's transport (built-in / USB / AirPlay / …).
+    static func transportType(_ id: AudioDeviceID) -> UInt32 {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyTransportType,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var transport: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        guard AudioObjectGetPropertyData(id, &addr, 0, nil, &size, &transport) == noErr else { return 0 }
+        return transport
     }
 
     private static func string(_ id: AudioDeviceID, _ selector: AudioObjectPropertySelector) -> String? {

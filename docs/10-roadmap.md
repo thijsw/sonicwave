@@ -94,6 +94,15 @@ playback first (M3).
 - Full unit + UI test pass on macOS 15 / Xcode 26 CI — `08`.
 - **Exit:** signed MAS build uploads to App Store Connect; tests green.
 
+## AirPlay
+- **Tier 1 (code complete, live test pending):** connected AirPlay routes are
+  regular Core Audio devices — labeled in the picker, rate-matching skipped
+  (fixed network clock). Needs one pass against a real AirPlay 2 receiver
+  (another Mac / HomePod / Apple TV) — see `PROGRESS.md` 2026-07-08.
+- **Tier 2 (post-v1):** in-app discovery/multi-room via
+  `AVSampleBufferAudioRenderer` + `AVRoutePickerView` — a parallel render
+  path beside the `AVAudioEngine` pipeline; significant rework.
+
 ## Risk register
 
 | Risk | Milestone | Mitigation |
