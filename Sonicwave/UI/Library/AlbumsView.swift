@@ -6,8 +6,6 @@ struct AlbumsView: View {
     @Environment(LibraryModel.self) private var library
     @Environment(Navigator.self) private var navigator
 
-    private let columns = [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 20)]
-
     var body: some View {
         VStack(spacing: 0) {
             // Sort lives in the view's own header now that the window toolbar is
@@ -20,7 +18,7 @@ struct AlbumsView: View {
             .padding(.vertical, 8)
 
             ScrollView {
-                LazyVGrid(columns: columns, spacing: 20) {
+                AlignedAdaptiveGrid(tileMinimum: 160, spacing: 20) {
                     ForEach(library.albums) { album in
                         Button { navigator.openAlbum(album) } label: {
                             AlbumGridCell(coverArt: album.coverArt,

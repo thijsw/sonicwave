@@ -61,14 +61,12 @@ struct ArtistDetailView: View {
     @Environment(Navigator.self) private var navigator
     @State private var albums: [Album] = []
 
-    private let columns = [GridItem(.adaptive(minimum: 150, maximum: 190), spacing: 16)]
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 Text(artist.name).font(.title2).bold()
                     .padding(.horizontal).padding(.top, 14)
-                LazyVGrid(columns: columns, spacing: 16) {
+                AlignedAdaptiveGrid(tileMinimum: 150, spacing: 16) {
                     ForEach(albums) { album in
                         Button { navigator.openAlbum(album) } label: {
                             AlbumGridCell(coverArt: album.coverArt,
