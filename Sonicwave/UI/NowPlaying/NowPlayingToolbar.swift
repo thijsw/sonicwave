@@ -144,6 +144,9 @@ struct NowPlayingDisplay: View {
             }
         }
         .onHover { hovering = $0 }
+        // NOTE: no .contextMenu here — NSToolbar swallows right-clicks on its
+        // items (it shows its own customize menu), so the affordance lives on
+        // the panel's album line and in Controls → Show Album in Library.
         .help(showUpNext ? "Hide Now Playing" : "Show Now Playing")
         .accessibilityAddTraits(.isButton)
         .accessibilityLabel("Now Playing")

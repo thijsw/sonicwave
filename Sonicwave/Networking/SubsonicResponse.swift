@@ -116,3 +116,11 @@ struct PlaylistsBody: Decodable, Sendable {
 struct PlaylistBody: Decodable, Sendable {
     var playlist: Playlist
 }
+
+struct ScanStatusBody: Decodable, Sendable {
+    struct Status: Decodable, Sendable {
+        var scanning: Bool
+        var count: Int?
+    }
+    var scanStatus: Status
+}

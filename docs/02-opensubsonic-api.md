@@ -75,6 +75,9 @@ Grouped by feature. All are `GET` on `/rest/<method>`.
   return if `formPost` support (auth via POST body, out of URLs/server logs)
   is ever wanted.
 - ~~`getMusicFolders`~~ — not needed; the app queries the whole library.
+- `startScan` — kick off a server-side library rescan (Settings →
+  Connection "Scan Library", File → Update Server Library). Fire-and-forget;
+  the returned scanning/count is surfaced once in Settings.
 - `scrobble` — play reporting: `submission=false` ("now playing") at each
   track start, `submission=true` once playback passes half the track or
   4 minutes (tracks ≥ 30s; the Last.fm rules Navidrome mirrors). Drives the

@@ -14,6 +14,15 @@ struct SonicwaveCommands: Commands {
             Button("New Playlist…") { app.requestNewPlaylist() }
                 .keyboardShortcut("n", modifiers: .command)
                 .disabled(!app.connection.isConnected)
+
+            Divider()
+
+            // Kicks off a server-side rescan; progress feedback lives in
+            // Settings → Connection (the scan runs asynchronously anyway).
+            Button("Update Server Library") {
+                Task { await app.connection.startLibraryScan() }
+            }
+            .disabled(!app.connection.isConnected)
         }
 
         CommandGroup(after: .sidebar) {
@@ -65,6 +74,10 @@ struct SonicwaveCommands: Commands {
             }
             .keyboardShortcut("l", modifiers: .command)
             .disabled(app.player.currentTrack == nil || !app.connection.isConnected)
+
+            Button("Show Album in Library") { app.requestShowCurrentAlbum() }
+                .keyboardShortcut("l", modifiers: [.command, .shift])
+                .disabled(app.player.currentTrack?.albumId == nil)
 
             Divider()
 

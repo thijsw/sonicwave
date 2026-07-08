@@ -136,9 +136,17 @@ struct RootView: View {
             Text(player.lastError ?? "")
         }
         .environment(navigator)
-        // Switching sections or editing the query leaves the opened album.
+        // Switching sections or typing a query leaves the opened album.
+        // (Clearing the query keeps it — "Show Album in Library" clears any
+        // active search while opening the current track's album.)
         .onChange(of: selectionRaw) { navigator.album = nil }
-        .onChange(of: searchText) { navigator.album = nil }
+        .onChange(of: searchText) { _, query in
+            if !query.isEmpty { navigator.album = nil }
+        }
+        // Controls-menu requests (Go to Time…, Show Album in Library) live in
+        // their own modifier — inlining them here pushed body past what the
+        // type-checker resolves in reasonable time.
+        .modifier(CurrentTrackCommands(searchText: $searchText, navigator: navigator))
         // Search hands an artist off to the Artists section.
         .onChange(of: navigator.pendingArtist) { _, artist in
             if artist != nil {
@@ -197,6 +205,29 @@ struct RootView: View {
             case let .playlist(id): PlaylistDetailView(playlistID: id)
             case nil: ContentUnavailableView("Select an item", systemImage: "music.note")
             }
+        }
+    }
+
+    /// Handler for Show Album in Library (⇧⌘L / the panel's album line). A
+    /// separate modifier to keep RootView.body type-checkable.
+    private struct CurrentTrackCommands: ViewModifier {
+        @Binding var searchText: String
+        let navigator: Navigator
+        @Environment(AppModel.self) private var app
+        @Environment(PlayerModel.self) private var player
+        @Environment(LibraryModel.self) private var library
+
+        func body(content: Content) -> some View {
+            content
+                .onChange(of: app.showCurrentAlbumRequests) {
+                    guard let albumId = player.currentTrack?.albumId else { return }
+                    Task {
+                        if let album = await library.album(id: albumId) {
+                            searchText = ""
+                            navigator.openAlbum(album)
+                        }
+                    }
+                }
         }
     }
 

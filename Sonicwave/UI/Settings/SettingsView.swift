@@ -53,6 +53,24 @@ private struct ConnectionSettingsView: View {
                 statusRow
             }
 
+            if connection.isConfigured {
+                Section {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Ask the server to rescan its music folders.")
+                                .font(.callout).foregroundStyle(.secondary)
+                            if let message = connection.scanMessage {
+                                Text(message).font(.callout)
+                            }
+                        }
+                        Spacer()
+                        Button("Scan Library") {
+                            Task { await connection.startLibraryScan() }
+                        }
+                    }
+                }
+            }
+
             // A zero-setup way in for new users (and App Review): the public
             // Navidrome demo server. Hidden once a server is configured, so
             // it can't clobber a real setup with one click.

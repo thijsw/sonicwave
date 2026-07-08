@@ -136,6 +136,22 @@ final class ConnectionModel {
         state = .unconfigured
     }
 
+    /// Feedback from the last library-scan trigger (shown in Settings).
+    private(set) var scanMessage: String?
+
+    /// Ask the server to rescan its music folders. The scan itself runs
+    /// server-side and asynchronously; this only kicks it off.
+    func startLibraryScan() async {
+        scanMessage = "Requesting scan…"
+        do {
+            let body = try await client.send(.startScan, as: ScanStatusBody.self)
+            let count = body.scanStatus.count.map { " — \($0) items" } ?? ""
+            scanMessage = (body.scanStatus.scanning ? "Scanning" : "Scan finished") + count
+        } catch {
+            scanMessage = error.userMessage
+        }
+    }
+
     func persistTranscodePrefs() {
         let defaults = UserDefaults.standard
         defaults.set(transcodeEnabled, forKey: "transcodeEnabled")

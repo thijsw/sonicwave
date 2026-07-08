@@ -94,6 +94,47 @@ final class ArtworkCache {
         sizesByID.removeAll()
     }
 
+    /// The original-size artwork, staged as a nicely-named image file for
+    /// Quick Look (the panel titles itself with the filename). The original
+    /// bytes are disk-cached like any other size (keyed size 0).
+    func originalImageFileURL(coverArt id: String?, displayName: String) async -> URL? {
+        guard let id, !id.isEmpty, let clientBox else { return nil }
+        return await Self.stageOriginal(id: id, displayName: displayName,
+                                        client: clientBox.client, dir: serverDir())
+    }
+
+    private nonisolated static func stageOriginal(id: String, displayName: String,
+                                                  client: SubsonicClient, dir: URL) async -> URL? {
+        let cacheURL = dir.appendingPathComponent(filename(id: id, size: 0))
+        var data = try? Data(contentsOf: cacheURL)
+        if data == nil {
+            guard let url = try? await client.coverArtURL(id: id),
+                  let (fetched, _) = try? await URLSession.shared.data(from: url) else { return nil }
+            try? fetched.write(to: cacheURL, options: .atomic)
+            data = fetched
+        }
+        guard let data, NSImage(data: data) != nil else { return nil }
+
+        let safeName = displayName
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ":", with: "-")
+        let previews = dir.appendingPathComponent("previews", isDirectory: true)
+        try? FileManager.default.createDirectory(at: previews, withIntermediateDirectories: true)
+        let staged = previews.appendingPathComponent(safeName)
+            .appendingPathExtension(imageExtension(for: data))
+        try? data.write(to: staged, options: .atomic)
+        return staged
+    }
+
+    /// Quick Look picks the handler from the extension, so name the staged
+    /// file for what the bytes actually are.
+    private nonisolated static func imageExtension(for data: Data) -> String {
+        if data.starts(with: [0x89, 0x50]) { return "png" }
+        if data.starts(with: [0x52, 0x49, 0x46, 0x46]) { return "webp" }
+        if data.starts(with: [0x47, 0x49, 0x46]) { return "gif" }
+        return "jpg"
+    }
+
     // MARK: - Disk + network (off the main actor)
 
     private func serverDir() -> URL {

@@ -50,8 +50,30 @@ xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
 
 ---
 
-## Competitive cheap wins: Home shelves, scrobbling, demo server (2026-07-08)
-Borrowed from a survey of Submariner (the other macOS Subsonic client):
+## Polish batch: scan, Quick Look art, show-album (2026-07-08)
+Player quality-of-life features, all live-verified:
+- **Server library scan**: `startScan` endpoint; Settings → Connection
+  "Scan Library" (shows "Scanning — N items" feedback) + File → Update
+  Server Library. Verified against Navidrome.
+- **Seek precision log-verified sample-exact** while validating seek entry
+  points (temporary tick logging: position ran 30.0 → 31.4 dead-on after a
+  seek to 0:30). An apparent "+10s offset" during UI testing turned out to
+  be measurement latency, not a bug. (A "Go to Time…" prompt was built on
+  this and removed the same day as not useful enough.)
+- **Quick Look artwork**: clicking the panel's hero art opens the
+  full-resolution cover (`ArtworkCache.originalImageFileURL` stages a
+  properly-named file, extension sniffed from magic bytes so QL renders it).
+- **Show Album in Library**: the panel's album line is clickable, plus
+  Controls → Show Album in Library (⇧⌘L). Resolves `albumId` via
+  `getAlbum`. Learned: SwiftUI `.contextMenu` on toolbar items never fires —
+  NSToolbar intercepts right-clicks for its own customize menu — so the LCD
+  hosts no context menu.
+- RootView's Controls-menu handlers live in a `CurrentTrackCommands`
+  modifier (inlining them broke the type-checker's time budget).
+- Known cosmetic nit: the fixed-height Settings window scrolls its
+  Connection form now that the scan section is added.
+
+## Home shelves, scrobbling, demo server (2026-07-08)
 - **Home** sidebar section (`HomeView`): a distinct landing page —
   time-of-day greeting, "Jump Back In" hero card (blurred-artwork backdrop,
   inline Play verified to win over the card's open-album tap), then

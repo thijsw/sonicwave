@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import QuickLook
 
 /// The Now Playing / Up Next panel, shown as an inspector on the trailing edge:
 /// a hero card for the current track (artwork, metadata, scrubber, transport)
@@ -133,12 +134,27 @@ struct NowPlayingPanel: View {
 /// centerpiece.
 private struct CurrentTrackCard: View {
     let song: Song
+    @Environment(AppModel.self) private var app
+    /// Full-resolution artwork staged for Quick Look (set on hero click).
+    @State private var artworkPreviewURL: URL?
+    @State private var albumHovering = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Hero artwork, full-bleed: flush with the panel edges and the
-            // toolbar above, filling all available width.
+            // toolbar above, filling all available width. Click for the
+            // full-resolution cover in Quick Look.
             HeroArtwork(coverArt: song.coverArt)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    Task {
+                        artworkPreviewURL = await ArtworkCache.shared.originalImageFileURL(
+                            coverArt: song.coverArt,
+                            displayName: song.album ?? song.title)
+                    }
+                }
+                .quickLookPreview($artworkPreviewURL)
+                .help("Show full-size artwork")
 
             VStack(alignment: .leading, spacing: 0) {
                 // Title / artist / album.
@@ -151,11 +167,18 @@ private struct CurrentTrackCard: View {
                     .lineLimit(1)
                     .padding(.top, 3)
                 if let album = song.album, !album.isEmpty {
+                    // Clicking the album line jumps to it in the library
+                    // (also Controls → Show Album in Library, ⇧⌘L).
                     Text(album)
                         .font(.callout)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(albumHovering ? .secondary : .tertiary)
                         .lineLimit(1)
                         .padding(.top, 1)
+                        .onHover { albumHovering = $0 }
+                        .onTapGesture { app.requestShowCurrentAlbum() }
+                        .help("Show Album in Library")
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityLabel("Show \(album) in Library")
                 }
                 // Encoding badge ("FLAC", "320 kbps") for the quality-minded.
                 if let quality = song.qualityLabel {

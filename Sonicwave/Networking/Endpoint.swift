@@ -15,6 +15,10 @@ struct Endpoint: Sendable {
     // MARK: Connection
     static let ping = Endpoint("ping")
 
+    /// Ask the server to rescan its music folders (Settings → Connection,
+    /// File → Update Server Library).
+    static let startScan = Endpoint("startScan")
+
     // MARK: Library
     static func albumList2(type: String, size: Int, offset: Int) -> Endpoint {
         Endpoint("getAlbumList2", [

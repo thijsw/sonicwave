@@ -24,6 +24,14 @@ final class AppModel {
         newPlaylistRequests += 1
     }
 
+    /// Bumped by Controls → Show Album in Library (⇧⌘L) and the panel's
+    /// album line; RootView resolves the current track's album and opens it.
+    private(set) var showCurrentAlbumRequests = 0
+
+    func requestShowCurrentAlbum() {
+        showCurrentAlbumRequests += 1
+    }
+
     // Services (not observed directly by views).
     let credentials: CredentialStore
     let client: SubsonicClient
