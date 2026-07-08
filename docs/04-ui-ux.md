@@ -63,6 +63,16 @@ Grouped like iTunes, using `Section`s and SF Symbols:
     context menu for rename/delete; "+" to create.
 
 Selection drives the detail area. `LibraryModel` backs the content.
+Selection appearances are **custom-drawn** (the backing tables' system
+highlight is suppressed via `ListSelectionHighlightDisabler`; selection
+state and keyboard navigation are untouched) because the system pill blends
+with the list material and never matches the app accent:
+- **Sidebar**: Music-style neutral-gray pill with standard side insets, red
+  icons on top (the iTunes reference look).
+- **Artist list & track tables**: the accent red, white content.
+Note: the `AccentColor` asset is tagged **Display P3** — the red was sampled
+on a wide-gamut screen and lies outside the sRGB gamut; tagged sRGB it
+rendered visibly washed out.
 
 ## Track table ✅
 

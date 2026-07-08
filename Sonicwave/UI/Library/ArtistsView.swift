@@ -16,18 +16,27 @@ struct ArtistsView: View {
         HStack(spacing: 0) {
             List(selection: $selectedID) {
                 ForEach(library.artists) { artist in
+                    let isSelected = artist.id == selectedID
                     HStack(spacing: 10) {
                         ArtworkView(coverArt: artist.coverArt, size: 36, cornerRadius: 18)
                         Text(artist.name).lineLimit(1)
+                            .foregroundStyle(isSelected ? .white : .primary)
                         Spacer()
                         if let count = artist.albumCount {
-                            Text("\(count)").foregroundStyle(.secondary).monospacedDigit()
+                            Text("\(count)").monospacedDigit()
+                                .foregroundStyle(isSelected ? AnyShapeStyle(.white.opacity(0.8))
+                                                            : AnyShapeStyle(.secondary))
                         }
                     }
                     .tag(artist.id)
+                    // Accent selection matching the track list (the system
+                    // highlight — suppressed below — renders the accent
+                    // muted through the list material).
+                    .listRowBackground(isSelected ? Color.accentColor : nil)
                 }
             }
             .listStyle(.plain)
+            .background(ListSelectionHighlightDisabler())
             .frame(width: 240)
 
             Divider()

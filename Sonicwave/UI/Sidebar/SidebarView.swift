@@ -14,8 +14,8 @@ struct SidebarView: View {
     @State private var deleting: Playlist?
     @State private var dropTargetID: String?
 
-    /// The asset red, loaded by name so it stays red even though the sidebar is
-    /// tinted gray (iTunes shows colored icons over a neutral-gray selection).
+    /// The asset red for the row icons (red icons over the neutral-gray
+    /// selection pill, per the iTunes reference — see `rowBackground`).
     private let iconColor = Color("AccentColor")
 
     var body: some View {
@@ -53,6 +53,7 @@ struct SidebarView: View {
                 }
             }
         }
+        .background(ListSelectionHighlightDisabler())
         .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 320)
         // Drop the automatic sidebar-toggle (we want the sidebar always visible).
         .toolbar(removing: .sidebarToggle)
@@ -102,12 +103,12 @@ struct SidebarView: View {
     @ViewBuilder
     private func playlistRow(_ playlist: Playlist) -> some View {
         Label(playlist.name, systemImage: "music.note.list")
+            .listItemTint(.fixed(iconColor))
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .tag(SidebarSelection.playlist(id: playlist.id))
-            .listRowBackground(dropTargetID == playlist.id
-                ? RoundedRectangle(cornerRadius: 6).fill(iconColor.opacity(0.25))
-                : nil)
+            .listRowBackground(rowBackground(selected: selection == .playlist(id: playlist.id),
+                                             dropTarget: dropTargetID == playlist.id))
             .dropDestination(for: DraggedTrack.self) { items, _ in
                 let ids = items.map(\.songId)
                 guard !ids.isEmpty else { return false }
@@ -135,9 +136,33 @@ struct SidebarView: View {
         Label {
             Text(title)
         } icon: {
-            Image(systemName: symbol).foregroundStyle(iconColor)
+            Image(systemName: symbol)
         }
+        // Sidebar lists color Label icons through the item tint (a plain
+        // foregroundStyle on the Image is overridden).
+        .listItemTint(.fixed(iconColor))
         .tag(tag)
+        .listRowBackground(rowBackground(selected: selection == tag, dropTarget: false))
+    }
+
+    /// The selection pill is drawn HERE (the system's is suppressed via
+    /// `ListSelectionHighlightDisabler`) in Music's neutral gray — red icons
+    /// over a gray pill, per the iTunes reference — with the standard
+    /// sidebar-pill insets rather than edge-to-edge.
+    @ViewBuilder
+    private func rowBackground(selected: Bool, dropTarget: Bool) -> some View {
+        if dropTarget {
+            pill(iconColor.opacity(0.25))
+        } else if selected {
+            pill(Color(nsColor: .unemphasizedSelectedContentBackgroundColor))
+        }
+    }
+
+    private func pill(_ color: Color) -> some View {
+        RoundedRectangle(cornerRadius: 5)
+            .fill(color)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 1)
     }
 
     private var renamingBinding: Binding<Bool> {
