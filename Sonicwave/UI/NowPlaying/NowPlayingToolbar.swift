@@ -135,8 +135,12 @@ struct NowPlayingDisplay: View {
         .contentShape(RoundedRectangle(cornerRadius: LCD.cornerRadius))
         .onTapGesture {
             // The panel is only relevant while something is playing or queued.
+            // withAnimation: the inspector, the split columns, and this
+            // flexible LCD all resize in ONE coordinated pass — bare toggles
+            // let each layer settle separately, which reads as the whole
+            // window jittering (the sidebar most visibly).
             if player.currentTrack != nil || !player.upNext.isEmpty {
-                showUpNext.toggle()
+                withAnimation { showUpNext.toggle() }
             }
         }
         .onHover { hovering = $0 }
@@ -170,12 +174,39 @@ struct VolumeControl: View {
             Image(systemName: "speaker.fill")
                 .foregroundStyle(.secondary).font(.caption)
                 .accessibilityHidden(true)
-            SlimSlider(value: $player.volume, range: 0...1,
-                       fill: .primary.opacity(0.55), thumbSize: 9)
-                .frame(width: 70)
-                .accessibilityLabel("Volume")
+            // Shielded: the unified toolbar is a window-drag region, and a
+            // SwiftUI DragGesture doesn't opt out of it the way native
+            // controls do — dragging the slider would move the whole window.
+            WindowDragShield {
+                SlimSlider(value: $player.volume, range: 0...1,
+                           fill: .primary.opacity(0.55), thumbSize: 9)
+                    .frame(width: 70)
+                    .accessibilityLabel("Volume")
+            }
         }
     }
+}
+
+/// Hosts content in an `NSHostingView` that refuses `mouseDownCanMoveWindow`,
+/// so drag gestures on custom controls in the toolbar operate the control
+/// instead of dragging the window. (AppKit asks the NSView under the initial
+/// mouse-down; SwiftUI's own hosting view says yes for custom-drawn content.)
+private struct WindowDragShield<Content: View>: NSViewRepresentable {
+    @ViewBuilder var content: () -> Content
+
+    func makeNSView(context: Context) -> NSHostingView<Content> {
+        let view = ShieldingHostingView(rootView: content())
+        view.sizingOptions = .intrinsicContentSize
+        return view
+    }
+
+    func updateNSView(_ nsView: NSHostingView<Content>, context: Context) {
+        nsView.rootView = content()
+    }
+}
+
+private final class ShieldingHostingView<Content: View>: NSHostingView<Content> {
+    override var mouseDownCanMoveWindow: Bool { false }
 }
 
 // MARK: - Slim slider

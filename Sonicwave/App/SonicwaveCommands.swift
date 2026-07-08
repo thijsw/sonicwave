@@ -17,7 +17,12 @@ struct SonicwaveCommands: Commands {
         }
 
         CommandGroup(after: .sidebar) {
-            Toggle("Show Now Playing", isOn: $showUpNext)
+            // The set goes through withAnimation so ⌘U opens the panel as one
+            // coordinated layout pass (same as the LCD/toolbar toggles).
+            Toggle("Show Now Playing", isOn: Binding(
+                get: { showUpNext },
+                set: { newValue in withAnimation { showUpNext = newValue } }
+            ))
                 .keyboardShortcut("u", modifiers: .command)
                 .disabled(app.player.currentTrack == nil && app.player.upNext.isEmpty)
             Toggle("Show Column Browser", isOn: $showColumnBrowser)

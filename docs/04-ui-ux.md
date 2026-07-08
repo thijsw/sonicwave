@@ -94,8 +94,19 @@ selectable lists; selections are part of restorable view state. Toggleable
 
 ## Now Playing panel (Up Next / play queue) ✅
 
-- A trailing inspector (`NowPlayingPanel`, ~344pt), headerless (closed via the
-  toolbar toggle, the LCD, or ⌘U). Only presentable while something is playing
+- A trailing pane (`NowPlayingPanel`, 344pt) hosted **inside the detail
+  column, below the toolbar**, as a width-animated `HStack` member —
+  deliberately NOT SwiftUI's `.inspector`: the system inspector inserts its
+  column into the window's split view at full width before the detail yields
+  space, shoving the whole content pane left and briefly pushing the sidebar
+  off-screen on every toggle (verified frame-by-frame). Opening below the
+  toolbar means the toolbar's layout is never touched by the toggle either —
+  NSToolbar item re-layout snaps rather than animates, so any design that
+  required the header to reflow looked janky. Motion-analysis verified: the
+  pane slides over ~10 frames while the sidebar and toolbar show zero moved
+  frames. Trade-offs: the panel is not user-resizable, and the hero artwork
+  tops out at the toolbar's bottom edge rather than the window top.
+  Headerless (closed via the toolbar toggle, the LCD, or ⌘U). Only presentable while something is playing
   or queued — otherwise it stays hidden (no empty state) and its toggles are
   disabled; the stored preference survives, so it reappears when playback
   starts. Contents: a full-bleed square hero artwork flush with

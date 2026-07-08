@@ -50,6 +50,33 @@ xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
 
 ---
 
+## Toolbar/panel stability fixes (2026-07-08)
+Status: **done & frame-verified** (screen recordings analyzed per frame;
+note: computer-use synthetic input does NOT deliver while `screencapture -V`
+records — drive the app via `osascript` keystrokes when filming).
+- **Sidebar shove on panel toggle (the real one):** presenting the Now
+  Playing panel via `.inspector` inserts its column into the window's split
+  view at full width *before* the detail column yields space — the whole
+  content pane slides left, pushing the sidebar off the window edge and
+  snapping it back (~9 frames at 60 fps, caught on camera). Fixed by hosting
+  the panel as a width-animated trailing pane **inside the detail column,
+  below the toolbar** (`HStack` + `.transition(.move(edge: .trailing))`);
+  the outer split view never re-lays-out and the toolbar never needs to
+  reflow (NSToolbar item re-layout snaps, never animates — every attempt at
+  a header that tracks the panel, animated padding / merged full-width item
+  / split-view holding priorities, either snapped or landed in the overflow
+  menu). Motion-analysis verified: the pane slides over ~10 frames; the
+  sidebar and the toolbar strip show **zero** moved frames across both
+  toggle directions. Trade-offs: no inspector drag-to-resize (fixed 344pt),
+  and the hero artwork tops out at the toolbar's bottom edge rather than
+  the window top.
+- Along the way: panel toggles (LCD, toolbar button, ⌘U, dismiss binding)
+  wrapped in `withAnimation`; `columnVisibility` pinned to `.constant(.all)`
+  (the sidebar is permanently visible by design); the toolbar volume slider
+  is hosted in an `NSHostingView` that refuses `mouseDownCanMoveWindow` —
+  dragging it no longer moves the window (custom SwiftUI drag gestures don't
+  opt out of toolbar window-dragging the way native controls do).
+
 ## M8 — release signing pipeline (2026-07-07)
 Status: **Developer ID pipeline working end-to-end; MAS path configured and
 blocked on portal artifacts.**

@@ -30,20 +30,45 @@ struct RootView: View {
         // sits in the sidebar. Using the native toolbar — rather than a custom
         // bar drawn above the split view — means window dragging, traffic
         // lights, resize and full-screen are all handled by the system.
-        NavigationSplitView {
+        // columnVisibility is pinned to .all: the sidebar is permanently
+        // visible by design (the toggle is removed below), and leaving the
+        // visibility "automatic" let the split view re-evaluate it while the
+        // inspector opens/closes — briefly collapsing and restoring the
+        // sidebar, which read as the whole window jumping.
+        NavigationSplitView(columnVisibility: .constant(.all)) {
             SidebarView(selection: Binding(
                 get: { selection },
                 set: { selectionRaw = ($0 ?? .albums).rawValue }
             ))
         } detail: {
-            // The pinned hairline is the toolbar's bottom border — and it
-            // keeps scrollable content from extending up under the (fully
-            // transparent) toolbar: scroll views only underlap a safe-area
-            // edge they sit flush against, and without a NavigationStack
-            // there's no scroll-edge material to blur what pokes through.
+            // The Now Playing panel is a width-animated trailing pane INSIDE
+            // the detail column — deliberately NOT `.inspector` (which shoves
+            // the sidebar off-screen during its insertion; verified
+            // frame-by-frame) — and it opens BELOW the toolbar, so the
+            // toolbar's layout is entirely untouched by the toggle: nothing
+            // up there needs to move, and NSToolbar re-layout (which snaps,
+            // never animates) is never triggered. The pane and the detail
+            // column redistribute in one SwiftUI animation.
             VStack(spacing: 0) {
+                // The pinned hairline is the toolbar's bottom border — and it
+                // keeps scrollable content from extending up under the (fully
+                // transparent) toolbar: scroll views only underlap a safe-area
+                // edge they sit flush against, and without a NavigationStack
+                // there's no scroll-edge material to blur what pokes through.
                 Divider()
-                detail
+                HStack(spacing: 0) {
+                    detail
+                        .frame(maxWidth: .infinity)
+                    if showUpNext && nowPlayingAvailable {
+                        Divider()
+                        NowPlayingPanel()
+                            .frame(width: 344)
+                            .transition(.move(edge: .trailing))
+                    }
+                }
+                .animation(.easeInOut(duration: 0.22),
+                           value: showUpNext && nowPlayingAvailable)
+                .clipped()
             }
         }
         .toolbar {
@@ -65,7 +90,7 @@ struct RootView: View {
             ToolbarItem(placement: .primaryAction) {
                 HStack(spacing: 14) {
                     VolumeControl()
-                    Button { showUpNext.toggle() } label: {
+                    Button { withAnimation { showUpNext.toggle() } } label: {
                         Label("Now Playing", systemImage: "list.bullet.rectangle")
                     }
                     .help(showUpNext ? "Hide Now Playing" : "Show Now Playing")
@@ -85,15 +110,6 @@ struct RootView: View {
             Button("") { searchPresented = true }
                 .keyboardShortcut("f", modifiers: .command)
                 .hidden()
-        }
-        // The panel only presents while it has something to show; the stored
-        // preference survives, so it reappears when playback starts again.
-        .inspector(isPresented: Binding(
-            get: { showUpNext && nowPlayingAvailable },
-            set: { showUpNext = $0 }
-        )) {
-            NowPlayingPanel()
-                .inspectorColumnWidth(min: 300, ideal: 344, max: 420)
         }
         .overlay {
             if !isConnected { notConnectedOverlay }
