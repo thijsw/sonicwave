@@ -36,6 +36,13 @@ final class ProgressiveAudioSource: AudioStreamSource {
     private var decodedFrames: AVAudioFramePosition = 0
     private var inputFrames: AVAudioFramePosition = 0
 
+    /// Set when the stream turns out to be undecodable — a user-facing message
+    /// (why + what to do). `AVAudioConverter` has no magic-cookie API, so
+    /// cookie-dependent containers (AAC/ALAC in MP4/M4A) would decode to
+    /// garbage; they're refused at format discovery instead. Checked by
+    /// `PlaybackService` to stop the transfer and surface the failure.
+    private(set) var failureMessage: String?
+
     /// Seconds of decoded output to discard from the start. Used to seek on
     /// non-transcoded streams (the server can't offset the original file), by
     /// decoding from 0 and dropping everything before the seek point. Kept in
@@ -84,6 +91,12 @@ final class ProgressiveAudioSource: AudioStreamSource {
     func finish() {
         flushDecoder()
         flushAccum()
+        // The whole stream came and went without a decodable format (a
+        // container the parser can't stream, or corrupt data): report it
+        // rather than ending in silent, unexplained non-playback.
+        if sourceFormat == nil, failureMessage == nil {
+            failureMessage = "This track's format can't be streamed directly. " + Self.transcodeHint
+        }
         Self.log.debug("decode finished: inputFrames=\(self.inputFrames) decodedFrames=\(self.decodedFrames)")
         continuation.finish()
         if let streamID {
@@ -91,6 +104,9 @@ final class ProgressiveAudioSource: AudioStreamSource {
             self.streamID = nil
         }
     }
+
+    private static let transcodeHint =
+        "Turn on \"Transcode on the server\" in Settings → Playback to play it."
 
     /// Drain any PCM the decoder/converter is still holding (codec latency) by
     /// running one final conversion with `.endOfStream`. Without this the tail of
@@ -198,6 +214,22 @@ final class ProgressiveAudioSource: AudioStreamSource {
         guard AudioFileStreamGetProperty(streamID, kAudioFileStreamProperty_DataFormat,
                                          &size, &asbd) == noErr else { return }
         guard let source = AVAudioFormat(streamDescription: &asbd) else { return }
+
+        // Compressed audio in an MP4/M4A container needs the file's magic
+        // cookie handed to the decoder, and `AVAudioConverter` has no cookie
+        // API — conversion would emit garbage (audible as loud static).
+        // Refuse cleanly: leave `sourceFormat`/`converter` nil so no packets
+        // convert, and say why. (ADTS/MP3/FLAC/WAV/AIFF are self-describing.)
+        var fileFormat: UInt32 = 0
+        var ffSize = UInt32(MemoryLayout<UInt32>.size)
+        AudioFileStreamGetProperty(streamID, kAudioFileStreamProperty_FileFormat, &ffSize, &fileFormat)
+        if [kAudioFileM4AType, kAudioFileMPEG4Type].contains(AudioFileTypeID(fileFormat)),
+           asbd.mFormatID != kAudioFormatLinearPCM {
+            failureMessage = "This track is compressed audio (AAC/ALAC) in an MP4 container, "
+                + "which can't be streamed directly yet. " + Self.transcodeHint
+            Self.log.error("refusing cookie-dependent container: format id \(asbd.mFormatID)")
+            return
+        }
 
         sourceFormat = source
         if let chooseOutput {

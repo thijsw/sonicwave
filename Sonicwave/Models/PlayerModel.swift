@@ -312,6 +312,9 @@ extension PlayerModel {
         }
     }
 
+    /// Dismiss the surfaced playback error (the alert's binding).
+    func clearError() { lastError = nil }
+
     /// The engine crossed a gapless boundary into a pre-buffered track. `echo`
     /// is the queue position at hand-off; translate it to the entry's current
     /// position (queue edits may have shifted it since).

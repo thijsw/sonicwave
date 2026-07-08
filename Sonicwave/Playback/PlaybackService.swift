@@ -268,6 +268,9 @@ extension PlaybackService {
                 await throttleReadAhead(loader: loader, gen: gen)
                 if gen != generation || Task.isCancelled { break }
                 source.parse(chunk)
+                // Undecodable stream (e.g. AAC-in-MP4): no point downloading
+                // the rest; the failure surfaces after finish() below.
+                if source.failureMessage != nil { break }
             }
         } catch {
             if gen == generation {
@@ -276,6 +279,9 @@ extension PlaybackService {
         }
         source.finish()
         _ = await consume.value
+        if gen == generation, let message = source.failureMessage {
+            emit(.failed(message))
+        }
         decodeComplete(spanArrayIndex: spanArrayIndex, index: request.index, gen: gen)
     }
 

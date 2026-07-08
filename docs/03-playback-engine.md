@@ -101,8 +101,12 @@ linear-PCM sources (WAV/AIFF) are wrapped in `AVAudioPCMBuffer` (an
 `AVAudioCompressedBuffer` is invalid for PCM and decoded to garbage);
 per-batch decoder outputs are **consolidated into ~1-second buffers** so a
 burst of tiny `scheduleBuffer` calls can't starve the audio IO thread. Known
-limitation: magic-cookie formats (AAC-in-MP4) — `AVAudioConverter` has no
-cookie API; ADTS/MP3/FLAC/WAV/AIFF are fine.
+limitation: magic-cookie formats (AAC/ALAC-in-MP4) — `AVAudioConverter` has
+no cookie API; ADTS/MP3/FLAC/WAV/AIFF are fine. Since 2026-07-08 the source
+**refuses these cleanly at format discovery** (no garbage audio; the transfer
+stops) and a "Can't Play Track" alert points the user at server transcoding;
+a stream that ends without any decodable format gets the same treatment.
+Unit-tested against a real AVAudioFile-encoded `.m4a`.
 
 ## Gapless pre-buffering ✅ (pull model)
 

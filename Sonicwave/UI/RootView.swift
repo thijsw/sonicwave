@@ -19,6 +19,10 @@ struct RootView: View {
     /// In-place navigation (opened album, artist hand-off) — no NavigationStack.
     @State private var navigator = Navigator()
     @AppStorage("showUpNext") private var showUpNext = false
+    /// User-resizable Now Playing panel width (via the grab strip on its
+    /// leading edge), persisted across launches.
+    @AppStorage("nowPlayingPanelWidth") private var panelWidth = 344.0
+    private static let panelWidthRange = 300.0...480.0
     @Environment(\.openSettings) private var openSettings
 
     private var selection: SidebarSelection? { SidebarSelection(rawValue: selectionRaw) }
@@ -62,8 +66,15 @@ struct RootView: View {
                     if showUpNext && nowPlayingAvailable {
                         Divider()
                         NowPlayingPanel()
-                            .frame(width: 344)
+                            .frame(width: panelWidth.clamped(to: Self.panelWidthRange))
                             .transition(.move(edge: .trailing))
+                            // The grab strip straddles the divider; width
+                            // changes don't animate (the animation below is
+                            // keyed on visibility only), so dragging is live.
+                            .overlay(alignment: .leading) {
+                                PanelResizeHandle(width: $panelWidth, range: Self.panelWidthRange)
+                                    .offset(x: -5)
+                            }
                     }
                 }
                 .animation(.easeInOut(duration: 0.22),
@@ -113,6 +124,16 @@ struct RootView: View {
         }
         .overlay {
             if !isConnected { notConnectedOverlay }
+        }
+        // Playback failures (undecodable stream, dead server mid-track) were
+        // recorded but never shown; surface them once, dismissably.
+        .alert("Can't Play Track", isPresented: Binding(
+            get: { player.lastError != nil },
+            set: { if !$0 { player.clearError() } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(player.lastError ?? "")
         }
         .environment(navigator)
         // Switching sections or editing the query leaves the opened album.

@@ -165,6 +165,47 @@ struct DecodeContinuityTests {
         #expect(maxBoundaryStep < expectedStep * 6)
     }
 
+    /// AAC in an MP4 container needs the file's magic cookie, which
+    /// `AVAudioConverter` can't receive — instead of decoding to garbage, the
+    /// source must refuse with a user-facing message and produce no buffers.
+    @Test func aacInMP4SurfacesGracefulError() async throws {
+        let sine = makeSine()
+
+        // Encode a real .m4a (AAC in MP4) via AVAudioFile.
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sonicwave-test-\(UUID().uuidString).m4a")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let settings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVSampleRateKey: sampleRate,
+            AVNumberOfChannelsKey: 2
+        ]
+        let file = try AVAudioFile(forWriting: url, settings: settings)
+        try file.write(from: sine)
+        file.close() // flush the moov atom
+        let m4a = try Data(contentsOf: url)
+        #expect(m4a.count > 1000)
+
+        let canonical = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2)!
+        let source = ProgressiveAudioSource(outputFormat: canonical)
+        source.open(fileTypeHint: kAudioFileM4AType)
+        let chunk = 2048
+        var off = 0
+        while off < m4a.count {
+            let end = min(off + chunk, m4a.count)
+            source.parse(m4a.subdata(in: off..<end))
+            off = end
+        }
+        source.finish()
+
+        var decodedFrames = 0
+        for await box in source.buffers { decodedFrames += Int(box.buffer.frameLength) }
+
+        #expect(decodedFrames == 0)              // no garbage reached the pipeline
+        let message = try #require(source.failureMessage)
+        #expect(message.contains("Transcode"))   // the message is actionable
+    }
+
     /// Tests the exact AIFF code path's math in isolation: encode a sine to
     /// big-endian int16 (AIFF sample format), wrap it in an AVAudioPCMBuffer like
     /// `ProgressiveAudioSource` does, convert back to canonical float via

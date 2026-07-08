@@ -50,6 +50,26 @@ xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
 
 ---
 
+## CI, decode-failure UX, panel resize (2026-07-08)
+- **CI test job** (`.github/workflows/tests.yml`): build + full unit suite on
+  every push/PR, macOS 15 runner, newest installed Xcode selected at run
+  time, `CODE_SIGNING_ALLOWED=NO` (LiveDecodeTests self-skip without env).
+  Closes the last self-serve M8 item.
+- **AAC/ALAC-in-MP4 graceful error**: `ProgressiveAudioSource` now refuses
+  cookie-dependent containers at format discovery (`AVAudioConverter` has no
+  magic-cookie API — decoding emitted loud static) and reports a
+  `failureMessage`; a stream ending with no decodable format gets a generic
+  one. `PlaybackService` stops the transfer and emits `.failed`. Found along
+  the way: `PlayerModel.lastError` was **write-only** — playback failures
+  were never shown. RootView now presents a "Can't Play Track" alert with
+  the actionable message (enable server transcoding). Unit-tested against a
+  real AVAudioFile-encoded `.m4a` (`aacInMP4SurfacesGracefulError`).
+- **Now Playing panel resize**: grab strip on the panel's leading edge
+  (`PanelResizeHandle`), 300–480pt clamp, persisted
+  (`nowPlayingPanelWidth`). Lives inside the detail column so it cannot
+  re-trigger the split-view/toolbar instability the panel design avoids;
+  open/close animation is keyed on visibility only, so dragging is live.
+
 ## AirPlay Tier 1 (2026-07-08)
 Status: **code complete, build/lint clean, UI verified; live end-to-end
 deferred** (needs a real AirPlay 2 receiver — none available at the time).
