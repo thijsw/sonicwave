@@ -21,6 +21,7 @@ struct SidebarView: View {
     var body: some View {
         List(selection: $selection) {
             Section("Library") {
+                libraryItem("Home", "house", .home)
                 libraryItem("Albums", "square.stack", .albums)
                 libraryItem("Artists", "music.mic", .artists)
                 libraryItem("Songs", "music.note.list", .songs)

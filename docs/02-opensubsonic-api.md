@@ -71,9 +71,15 @@ Grouped by feature. All are `GET` on `/rest/<method>`.
 
 ### Connection
 - `ping` — connection/auth test.
-- `getOpenSubsonicExtensions` — capability probe (defined; exercised by the
-  live tests, not consulted at runtime).
+- ~~`getOpenSubsonicExtensions`~~ — removed as dead code 2026-07-08; would
+  return if `formPost` support (auth via POST body, out of URLs/server logs)
+  is ever wanted.
 - ~~`getMusicFolders`~~ — not needed; the app queries the whole library.
+- `scrobble` — play reporting: `submission=false` ("now playing") at each
+  track start, `submission=true` once playback passes half the track or
+  4 minutes (tracks ≥ 30s; the Last.fm rules Navidrome mirrors). Drives the
+  server's play counts / recently-played (and the Home shelves). Toggleable
+  (Settings → Playback, default on); best-effort, failures never surface.
 
 ### Library browse
 - `getAlbumList2` — albums, with `type` (`alphabeticalByName`, `newest`,

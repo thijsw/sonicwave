@@ -3,6 +3,7 @@ import Foundation
 /// Sidebar selection, grouped iTunes-style into Library and Playlists.
 /// See docs/04-ui-ux.md.
 enum SidebarSelection: Hashable {
+    case home
     case albums
     case artists
     case songs
@@ -15,6 +16,7 @@ enum SidebarSelection: Hashable {
 extension SidebarSelection: RawRepresentable {
     init?(rawValue: String) {
         switch rawValue {
+        case "home": self = .home
         case "albums": self = .albums
         case "artists": self = .artists
         case "songs": self = .songs
@@ -27,6 +29,7 @@ extension SidebarSelection: RawRepresentable {
 
     var rawValue: String {
         switch self {
+        case .home: "home"
         case .albums: "albums"
         case .artists: "artists"
         case .songs: "songs"

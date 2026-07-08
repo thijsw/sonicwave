@@ -69,9 +69,11 @@ needed (playback, Keychain, networking all work in the exported app).
 
 ## Review considerations 🔶
 
-- Functionality requires a user-supplied server — provide reviewer notes / a
-  demo server + credentials, or a clear empty/onboarding state, so App Review
-  can exercise the app.
+- Functionality requires a user-supplied server — reviewer notes point at the
+  **public Navidrome demo**: `https://demo.navidrome.org`, user `demo`,
+  password `demo` (resets periodically). Settings → Connection also shows a
+  one-click "Use Demo Server" button whenever no server is configured, so a
+  reviewer can exercise the app without typing anything.
 - Ensure graceful behavior with no server configured (onboarding to Settings)
   and on auth failure (re-auth prompt) — see `02`.
 
@@ -86,7 +88,8 @@ needed (playback, Keychain, networking all work in the exported app).
 - [x] No Tahoe-only API without `#available` guard (none used).
 - [ ] App Privacy details accurate (no tracking/analytics v1) — fill in at
       App Store Connect submission time.
-- [ ] Reviewer notes / demo credentials prepared.
+- [x] Reviewer notes / demo credentials prepared (public Navidrome demo +
+      in-app "Use Demo Server" button when unconfigured).
 - [x] Signing pipeline produces a verified Developer ID build
       (`scripts/release.sh`); MAS export configured, pending the Apple
       Distribution certificate + app record + profile.

@@ -52,6 +52,26 @@ private struct ConnectionSettingsView: View {
                 }
                 statusRow
             }
+
+            // A zero-setup way in for new users (and App Review): the public
+            // Navidrome demo server. Hidden once a server is configured, so
+            // it can't clobber a real setup with one click.
+            if !connection.isConfigured {
+                Section {
+                    HStack {
+                        Text("No server yet? Try the public Navidrome demo.")
+                            .font(.callout).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Use Demo Server") {
+                            connection.serverAddress = "https://demo.navidrome.org"
+                            connection.authMethod = .tokenSalt
+                            connection.username = "demo"
+                            connection.secret = "demo"
+                            Task { await connection.saveAndConnect() }
+                        }
+                    }
+                }
+            }
         }
         .formStyle(.grouped)
         .padding()
@@ -86,6 +106,8 @@ private struct PlaybackSettingsView: View {
     /// Bit-perfect-style rate matching (PlaybackService reads the same key,
     /// defaulting to on).
     @AppStorage("matchDeviceSampleRate") private var matchSampleRate = true
+    /// Scrobbling (PlayerModel reads the same key, defaulting to on).
+    @AppStorage("scrobbleEnabled") private var scrobbleEnabled = true
 
     /// The chosen device is currently absent (e.g. Bluetooth disconnected).
     /// Audio falls back to the system default; the choice sticks so it re-pins
@@ -129,6 +151,10 @@ private struct PlaybackSettingsView: View {
                     .font(.callout).foregroundStyle(.secondary)
             }
             Section("Streaming") {
+                Toggle("Report plays to the server", isOn: $scrobbleEnabled)
+                Text("Sends listens to the server (\"scrobbling\"), so play counts, " +
+                     "recently played and any connected scrobbler stay accurate.")
+                    .font(.callout).foregroundStyle(.secondary)
                 Toggle("Transcode on the server", isOn: $connection.transcodeEnabled)
                     .onChange(of: connection.transcodeEnabled) { connection.persistTranscodePrefs() }
                 if connection.transcodeEnabled {

@@ -50,6 +50,16 @@ struct Endpoint: Sendable {
         ])
     }
 
+    // MARK: Scrobbling
+    /// `submission: false` reports "now playing"; `true` records the play
+    /// (Navidrome play counts / external scrobblers).
+    static func scrobble(id: String, submission: Bool) -> Endpoint {
+        Endpoint("scrobble", [
+            .init(name: "id", value: id),
+            .init(name: "submission", value: submission ? "true" : "false")
+        ])
+    }
+
     // MARK: Favorites
     static let starred2 = Endpoint("getStarred2")
 

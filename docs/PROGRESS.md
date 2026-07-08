@@ -50,6 +50,28 @@ xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
 
 ---
 
+## Competitive cheap wins: Home shelves, scrobbling, demo server (2026-07-08)
+Borrowed from a survey of Submariner (the other macOS Subsonic client):
+- **Home** sidebar section (`HomeView`): a distinct landing page —
+  time-of-day greeting, "Jump Back In" hero card (blurred-artwork backdrop,
+  inline Play verified to win over the card's open-album tap), then
+  varied-size shelves (Keep Listening / Recently Added at 150pt / Most
+  Played / Random with re-roll) from `getAlbumList2` types. Shared
+  `Shelf`/`AlbumShelf` gained title, tile-size and header-accessory
+  parameters. Verified live against Navidrome (first flat four-shelf cut
+  was rejected as indistinct and redesigned).
+- **Scrobbling** (`PlayerModel+Scrobbling`, injected closure → `scrobble`):
+  "now playing" at track start, submission at half-track-or-4-minutes
+  (≥ 30s tracks). Settings → Playback toggle, default on. **Verified
+  end-to-end**: played a 2Pac track past its midpoint → after relaunch the
+  album led the server-fed Recently Played shelf (it was absent before —
+  plays predating this feature were never counted).
+- **Demo server**: Settings → Connection shows a one-click "Use Demo
+  Server" (public Navidrome demo, `demo`/`demo`) — only while no server is
+  configured, so it can't clobber a real setup. Doubles as the App Review
+  reviewer path (`07` checklist item closed). Demo server reachability
+  probe-verified; the button reuses the tested saveAndConnect path.
+
 ## CI, decode-failure UX, panel resize (2026-07-08)
 - **CI test job** (`.github/workflows/tests.yml`): build + full unit suite on
   every push/PR, macOS 15 runner, newest installed Xcode selected at run

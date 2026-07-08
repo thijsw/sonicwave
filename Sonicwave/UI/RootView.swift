@@ -159,6 +159,7 @@ struct RootView: View {
 
     private func load(_ selection: SidebarSelection?) async {
         switch selection {
+        case .home: await library.loadHomeIfNeeded()
         case .albums: await library.loadAlbumsIfNeeded()
         case .artists: await library.loadArtistsIfNeeded()
         case .songs: await library.loadSongsIfNeeded()
@@ -188,6 +189,7 @@ struct RootView: View {
             SearchResultsView(query: searchText)
         } else {
             switch selection {
+            case .home: HomeView()
             case .albums: AlbumsView()
             case .artists: ArtistsView()
             case .songs: SongsView()

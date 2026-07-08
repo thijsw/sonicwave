@@ -33,6 +33,13 @@ final class LibraryModel {
     private(set) var starredSongs: [Song] = []
     private(set) var starredAlbums: [Album] = []
 
+    // Home shelves (getAlbumList2 list types).
+    private(set) var homeNewest: [Album] = []
+    private(set) var homeRecent: [Album] = []
+    private(set) var homeFrequent: [Album] = []
+    private(set) var homeRandom: [Album] = []
+    private(set) var homeLoaded = false
+
     private(set) var playlists: [Playlist] = []
 
     static let pageSize = 100
@@ -53,6 +60,11 @@ final class LibraryModel {
         genres = []
         starredSongs = []
         starredAlbums = []
+        homeNewest = []
+        homeRecent = []
+        homeFrequent = []
+        homeRandom = []
+        homeLoaded = false
     }
 
     // MARK: - Albums (paginated)
@@ -305,5 +317,37 @@ final class LibraryModel {
         } catch {
             return []
         }
+    }
+}
+
+// MARK: - Home shelves
+
+extension LibraryModel {
+    func loadHomeIfNeeded() async {
+        guard !homeLoaded else { return }
+        await reloadHome()
+    }
+
+    /// The four shelves load concurrently; a shelf the server can't provide
+    /// simply stays empty (the view hides it).
+    func reloadHome() async {
+        async let newest = albumList(type: "newest")
+        async let recent = albumList(type: "recent")
+        async let frequent = albumList(type: "frequent")
+        async let random = albumList(type: "random")
+        (homeNewest, homeRecent, homeFrequent, homeRandom)
+            = await (newest, recent, frequent, random)
+        homeLoaded = true
+    }
+
+    /// Re-roll just the Random shelf (the Home view's refresh button).
+    func rerollRandomAlbums() async {
+        homeRandom = await albumList(type: "random")
+    }
+
+    private func albumList(type: String) async -> [Album] {
+        let body = try? await client.send(.albumList2(type: type, size: 20, offset: 0),
+                                          as: AlbumList2Body.self)
+        return body?.albumList2.album ?? []
     }
 }

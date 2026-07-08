@@ -50,12 +50,22 @@ final class PlayerModel {
     }
 
     @ObservationIgnored private let playback: PlaybackService?
-    @ObservationIgnored private let nowPlaying: NowPlayingCenter?
+    // Internal (not private): PlayerModel+RemoteCommands.swift wires this.
+    @ObservationIgnored let nowPlaying: NowPlayingCenter?
     @ObservationIgnored private var eventTask: Task<Void, Never>?
+    // Internal (not private): the scrobbling logic lives in
+    // PlayerModel+Scrobbling.swift and stored properties can't move with it.
+    /// Reports plays to the server (`scrobble`): (songId, submission).
+    /// Injected by AppModel; nil in tests.
+    @ObservationIgnored let scrobbler: (@Sendable (String, Bool) async -> Void)?
+    /// The current track's play has been recorded (once per track start).
+    @ObservationIgnored var submittedScrobble = false
 
-    init(playback: PlaybackService? = nil, nowPlaying: NowPlayingCenter? = nil) {
+    init(playback: PlaybackService? = nil, nowPlaying: NowPlayingCenter? = nil,
+         scrobbler: (@Sendable (String, Bool) async -> Void)? = nil) {
         self.playback = playback
         self.nowPlaying = nowPlaying
+        self.scrobbler = scrobbler
         if let playback { startEventLoop(playback) }
         wireRemoteCommands()
     }
@@ -214,6 +224,7 @@ extension PlayerModel {
         currentTrack = queue[index]
         duration = TimeInterval(queue[index].duration ?? 0)
         position = 0
+        scrobbleTrackStarted()
     }
 
     /// Manual skip: hard-restart playback at `index` (a brief gap is expected).
@@ -299,6 +310,7 @@ extension PlayerModel {
             position = time
             if dur > 0 { duration = dur }
             nowPlaying?.updateProgress(position: position, duration: duration, state: state)
+            scrobbleIfPlayedEnough()
         case let .trackChanged(index):
             gaplessAdvance(to: index)
         case let .wantNext(afterIndex):
@@ -329,6 +341,7 @@ extension PlayerModel {
         currentTrack = queue[index]
         duration = TimeInterval(queue[index].duration ?? 0)
         position = 0
+        scrobbleTrackStarted()
         // The span that just finished is done — drop its stale mapping.
         if let previous {
             spanPositions = spanPositions.filter { $0.value != previous }
@@ -367,22 +380,6 @@ extension PlayerModel {
 
     private func syncNowPlayingState() {
         nowPlaying?.update(track: currentTrack, state: state, position: position, duration: duration)
-    }
-
-    private func wireRemoteCommands() {
-        guard let nowPlaying else { return }
-        nowPlaying.onPlay = { [weak self] in
-            guard let self, self.state != .playing else { return }
-            self.togglePlayPause()
-        }
-        nowPlaying.onPause = { [weak self] in
-            guard let self, self.state == .playing else { return }
-            self.togglePlayPause()
-        }
-        nowPlaying.onTogglePlayPause = { [weak self] in self?.togglePlayPause() }
-        nowPlaying.onNext = { [weak self] in self?.next() }
-        nowPlaying.onPrevious = { [weak self] in self?.previous() }
-        nowPlaying.onSeek = { [weak self] time in self?.seek(to: time) }
     }
 
     // MARK: - Helpers

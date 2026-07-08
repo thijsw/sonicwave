@@ -56,8 +56,16 @@ queue.
 Grouped like iTunes, using `Section`s and SF Symbols:
 
 - **Library**
-  - Albums · Artists · Songs · Favorites (starred). Genre browsing lives in
-    the column browser (no separate sidebar item).
+  - Home · Albums · Artists · Songs · Favorites (starred). Genre browsing
+    lives in the column browser (no separate sidebar item).
+  - **Home** is a distinct landing page, not just re-sorted album lists: a
+    time-of-day greeting, a full-width "Jump Back In" hero card for the most
+    recently played album (cover on a blurred blow-up of itself + scrim,
+    inline Play; clicking the card opens the album), then shelves at varied
+    sizes — Keep Listening (continues past the hero), Recently Added
+    (larger 150pt tiles), Most Played, Random (re-roll button). Backed by
+    `getAlbumList2` list types; shelves the server can't fill stay hidden;
+    the played-based shelves are fed by the app's own scrobbling (see `02`).
 - **Playlists**
   - The user's server playlists (live from `getPlaylists`), each selectable;
     context menu for rename/delete; "+" to create.

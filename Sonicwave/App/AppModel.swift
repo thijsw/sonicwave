@@ -42,7 +42,11 @@ final class AppModel {
         self.nowPlaying = nowPlaying
         self.connection = ConnectionModel(client: client, credentials: credentials)
         self.library = LibraryModel(client: client)
-        self.player = PlayerModel(playback: playback, nowPlaying: nowPlaying)
+        self.player = PlayerModel(playback: playback, nowPlaying: nowPlaying,
+                                  scrobbler: { id, submission in
+            // Best-effort: a failed scrobble should never surface in the UI.
+            _ = try? await client.sendStatus(.scrobble(id: id, submission: submission))
+        })
 
         // Give the shared artwork cache access to the authenticated client, and
         // scope it to the current server so artwork never mixes across servers.
