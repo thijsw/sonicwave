@@ -78,6 +78,14 @@ low-footprint, HIG-faithful — instead of a browser tab.
   reachable over HTTP(S)
 - Xcode 26 / Swift 6.2 to build from source
 
+## Download
+
+Grab `Sonicwave-x.y.z.zip` from the
+[latest release](https://github.com/thijsw/sonicwave/releases/latest), unzip,
+and drop `Sonicwave.app` into `/Applications`. Builds are Developer
+ID-signed, hardened-runtime, and **notarized by Apple** — they launch
+without Gatekeeper warnings.
+
 ## Building
 
 ```sh

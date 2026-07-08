@@ -60,6 +60,12 @@ needed (playback, Keychain, networking all work in the exported app).
   `ExportOptions-app-store.plist`).
 - Debug still signs with Developer ID (hardened runtime off) for the stable
   Keychain designated requirement — see `PROGRESS.md`.
+- **GitHub Releases:** `scripts/publish.sh <version>` bumps
+  `MARKETING_VERSION` + build number, commits, runs the notarized
+  Developer ID build, refuses to ship anything Gatekeeper rejects, tags
+  `v<version>`, pushes, and creates the GitHub Release with the zip attached
+  (`gh release create … --generate-notes`). Downloads are public only once
+  the repository is public.
 
 ## Review considerations 🔶
 
