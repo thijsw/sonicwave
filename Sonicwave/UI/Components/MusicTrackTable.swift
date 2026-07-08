@@ -26,51 +26,6 @@ private final class InnerTableView: NSTableView {
     }
 }
 
-/// A selectable data column in the track list. The now-playing indicator and
-/// favorite-star columns are always present (fixed-width affordances); these are
-/// the content columns each call site opts into explicitly.
-enum TrackColumn {
-    case title, artist, album, genre, quality, time
-
-    struct Widths {
-        let initial: CGFloat
-        let min: CGFloat
-        let max: CGFloat
-    }
-
-    var id: String {
-        switch self {
-        case .title: "title"
-        case .artist: "artist"
-        case .album: "album"
-        case .genre: "genre"
-        case .quality: "quality"
-        case .time: "time"
-        }
-    }
-    var header: String {
-        switch self {
-        case .title: "Title"
-        case .artist: "Artist"
-        case .album: "Album"
-        case .genre: "Genre"
-        case .quality: "Quality"
-        case .time: "Time"
-        }
-    }
-    var widths: Widths {
-        switch self {
-        case .title: Widths(initial: 240, min: 120, max: 10_000)
-        case .artist: Widths(initial: 170, min: 80, max: 10_000)
-        case .album: Widths(initial: 170, min: 80, max: 10_000)
-        case .genre: Widths(initial: 100, min: 60, max: 400)
-        case .quality: Widths(initial: 78, min: 64, max: 110)
-        case .time: Widths(initial: 54, min: 54, max: 80)
-        }
-    }
-    var alignRight: Bool { self == .time }
-}
-
 /// AppKit `NSTableView`-backed track list — the single track view used across the
 /// app — giving the Music behaviours SwiftUI can't combine: edge-to-edge
 /// alternating stripes, **double-click-to-play**, reliable multi-selection,
@@ -146,6 +101,9 @@ struct MusicTrackTable: NSViewRepresentable {
             return parent.tracks.sorted { lhs, rhs in
                 let result: Bool
                 switch key {
+                case "number":  // disc-aware track order
+                    result = (lhs.discNumber ?? 1, lhs.track ?? 0)
+                        < (rhs.discNumber ?? 1, rhs.track ?? 0)
                 case "artist": result = text(lhs.artist, rhs.artist)
                 case "album": result = text(lhs.album, rhs.album)
                 case "genre": result = text(lhs.displayGenre, rhs.displayGenre)
@@ -196,6 +154,10 @@ struct MusicTrackTable: NSViewRepresentable {
             switch id {
             case "indicator":
                 return indicatorCell(for: song)
+            case "number" where song.id == parent.nowPlayingID:
+                // The # column doubles as the now-playing column (iTunes
+                // style): the speaker replaces the track number.
+                return indicatorCell(for: song)
             case "quality":
                 guard let label = song.qualityLabel else { return NSTableCellView() }
                 return QualityBadgeCell(text: label)
@@ -207,22 +169,7 @@ struct MusicTrackTable: NSViewRepresentable {
         }
 
         @MainActor private func indicatorCell(for song: Song) -> NSTableCellView {
-            let cell = NSTableCellView()
-            if song.id == parent.nowPlayingID {
-                let icon = NSImageView()
-                icon.image = NSImage(systemSymbolName: "speaker.wave.2.fill", accessibilityDescription: "Now playing")
-                icon.contentTintColor = NSColor(named: "AccentColor")
-                icon.imageScaling = .scaleProportionallyDown
-                icon.translatesAutoresizingMaskIntoConstraints = false
-                cell.addSubview(icon)
-                NSLayoutConstraint.activate([
-                    icon.centerXAnchor.constraint(equalTo: cell.centerXAnchor),
-                    icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-                    icon.widthAnchor.constraint(equalToConstant: 13),
-                    icon.heightAnchor.constraint(equalToConstant: 13)
-                ])
-            }
-            return cell
+            song.id == parent.nowPlayingID ? NowPlayingIndicatorCell() : NSTableCellView()
         }
 
         @MainActor private func favoriteCell(for song: Song, row: Int) -> NSTableCellView {
@@ -249,6 +196,7 @@ struct MusicTrackTable: NSViewRepresentable {
         @MainActor private func textCell(id: String, song: Song) -> NSTableCellView {
             let text: String
             switch id {
+            case "number": text = song.track.map(String.init) ?? ""
             case "title": text = song.title
             case "artist": text = song.artist ?? "—"
             case "album": text = song.album ?? "—"
@@ -264,8 +212,10 @@ struct MusicTrackTable: NSViewRepresentable {
             let cell: NSTableCellView = (id == "title") ? NSTableCellView() : SecondaryTextCell()
             if id != "title" { label.textColor = .secondaryLabelColor }
             cell.textField = label
-            if id == "time" {
-                label.alignment = .right
+            if id == "time" || id == "number" {
+                // Numbers center under the # header (sharing the column with
+                // the centered now-playing speaker); times stay right-aligned.
+                label.alignment = (id == "number") ? .center : .right
                 label.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
             }
             cell.addSubview(label)
@@ -347,24 +297,29 @@ extension MusicTrackTable {
 
     private func addColumns(to table: NSTableView) {
         func addColumn(_ id: String, _ title: String, width: CGFloat, min: CGFloat, max: CGFloat,
-                       sortKey: String? = nil, alignRight: Bool = false) {
+                       sortKey: String? = nil, alignment: NSTextAlignment = .left) {
             let col = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(id))
             col.title = title
             col.width = width
             col.minWidth = min
             col.maxWidth = max
-            // Match the header's alignment to the cell content (e.g. right-aligned Time).
-            col.headerCell.alignment = alignRight ? .right : .left
+            // Match the header's alignment to the cell content (e.g.
+            // right-aligned Time, centered #).
+            col.headerCell.alignment = alignment
             if sortable, let sortKey {
                 col.sortDescriptorPrototype = NSSortDescriptor(key: sortKey, ascending: true)
             }
             table.addTableColumn(col)
         }
-        addColumn("indicator", "", width: 22, min: 22, max: 22)
+        // With a track-number column, the # cell itself hosts the speaker on
+        // the playing row (iTunes style) — no separate indicator column.
+        if !columns.contains(.number) {
+            addColumn("indicator", "", width: 22, min: 22, max: 22)
+        }
         for column in columns {
             let widths = column.widths
             addColumn(column.id, column.header, width: widths.initial, min: widths.min, max: widths.max,
-                      sortKey: column.id, alignRight: column.alignRight)
+                      sortKey: column.id, alignment: column.alignment)
         }
         addColumn("fav", "", width: 26, min: 26, max: 26)
         // Flexible columns absorb extra width so rows/stripes fill edge-to-edge.

@@ -88,3 +88,36 @@ final class QualityBadgeCell: NSTableCellView {
             : NSColor.tertiaryLabelColor.cgColor
     }
 }
+
+/// Now-playing speaker cell: accent-tinted normally, white on the selected
+/// (emphasized) row — accent-on-accent would vanish into the red selection.
+final class NowPlayingIndicatorCell: NSTableCellView {
+    private let icon = NSImageView()
+
+    init() {
+        super.init(frame: .zero)
+        icon.image = NSImage(systemSymbolName: "speaker.wave.2.fill",
+                             accessibilityDescription: "Now playing")
+        icon.contentTintColor = NSColor(named: "AccentColor")
+        icon.imageScaling = .scaleProportionallyDown
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(icon)
+        NSLayoutConstraint.activate([
+            icon.centerXAnchor.constraint(equalTo: centerXAnchor),
+            icon.centerYAnchor.constraint(equalTo: centerYAnchor),
+            icon.widthAnchor.constraint(equalToConstant: 13),
+            icon.heightAnchor.constraint(equalToConstant: 13)
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) not supported") }
+
+    override var backgroundStyle: NSView.BackgroundStyle {
+        didSet {
+            icon.contentTintColor = backgroundStyle == .emphasized
+                ? .alternateSelectedControlTextColor
+                : NSColor(named: "AccentColor")
+        }
+    }
+}
