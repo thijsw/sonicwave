@@ -24,9 +24,12 @@ struct AlbumGridCell: View {
                     radius: hovering ? 9 : 2, y: hovering ? 6 : 1)
             .offset(y: hovering ? -3 : 0)
             .animation(.easeOut(duration: 0.15), value: hovering)
-            Text(title).font(.callout).bold().lineLimit(1)
-            if let subtitle, !subtitle.isEmpty {
-                Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            // Title and artist read as one tight block under the cover.
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.callout).bold().lineLimit(1)
+                if let subtitle, !subtitle.isEmpty {
+                    Text(subtitle).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                }
             }
         }
         .contentShape(Rectangle())
