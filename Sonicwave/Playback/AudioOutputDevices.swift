@@ -19,10 +19,7 @@ struct AudioDevice: Identifiable, Hashable, Sendable {
 final class AudioDeviceListObserver: @unchecked Sendable {
     private let queue = DispatchQueue(label: "nl.huell.sonicwave.audio-devices")
     private let block: AudioObjectPropertyListenerBlock
-    private var address = AudioObjectPropertyAddress(
-        mSelector: kAudioHardwarePropertyDevices,
-        mScope: kAudioObjectPropertyScopeGlobal,
-        mElement: kAudioObjectPropertyElementMain)
+    private var address = AudioOutputDevices.address(kAudioHardwarePropertyDevices)
 
     init(onChange: @escaping @Sendable () -> Void) {
         block = { _, _ in onChange() }
@@ -45,30 +42,14 @@ enum AudioOutputDevices {
     /// aggregates (created when the default device switches mid-render) are
     /// excluded — they're plumbing, not user-selectable outputs.
     static func all() -> [AudioDevice] {
-        var addr = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDevices,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain)
-        var size: UInt32 = 0
-        guard AudioObjectGetPropertyDataSize(system, &addr, 0, nil, &size) == noErr else { return [] }
-        let count = Int(size) / MemoryLayout<AudioDeviceID>.size
-        guard count > 0 else { return [] }
-        var ids = [AudioDeviceID](repeating: 0, count: count)
-        guard AudioObjectGetPropertyData(system, &addr, 0, nil, &size, &ids) == noErr else { return [] }
+        let ids: [AudioDeviceID] = readArray(system, kAudioHardwarePropertyDevices) ?? []
         return ids.filter(hasOutput).compactMap(device(for:))
             .filter { !$0.uid.hasPrefix("CADefaultDeviceAggregate") }
     }
 
     /// The current system default output device id, if any.
     static func defaultOutputID() -> AudioDeviceID? {
-        var addr = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain)
-        var dev = AudioDeviceID(0)
-        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
-        guard AudioObjectGetPropertyData(system, &addr, 0, nil, &size, &dev) == noErr else { return nil }
-        return dev
+        read(system, kAudioHardwarePropertyDefaultOutputDevice, as: AudioDeviceID.self)
     }
 
     /// Resolve a persisted UID back to the live device id.
@@ -80,24 +61,14 @@ enum AudioOutputDevices {
 
     /// The device's current nominal (hardware) sample rate.
     static func nominalSampleRate(of id: AudioDeviceID) -> Double? {
-        var addr = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyNominalSampleRate,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain)
-        var rate = Double(0)
-        var size = UInt32(MemoryLayout<Double>.size)
-        guard AudioObjectGetPropertyData(id, &addr, 0, nil, &size, &rate) == noErr else { return nil }
-        return rate
+        read(id, kAudioDevicePropertyNominalSampleRate, as: Double.self)
     }
 
     /// Set the device's nominal sample rate. The switch is asynchronous on the
     /// hardware side and fires configuration-change notifications.
     @discardableResult
     static func setNominalSampleRate(_ rate: Double, on id: AudioDeviceID) -> Bool {
-        var addr = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyNominalSampleRate,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain)
+        var addr = address(kAudioDevicePropertyNominalSampleRate)
         var value = rate
         return AudioObjectSetPropertyData(id, &addr, 0, nil,
                                           UInt32(MemoryLayout<Double>.size), &value) == noErr
@@ -106,15 +77,8 @@ enum AudioOutputDevices {
     /// The closest hardware rate the device supports for `target`: the exact
     /// rate when available, else the nearest supported one (ties go up).
     static func bestSupportedRate(for target: Double, on id: AudioDeviceID) -> Double? {
-        var addr = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyAvailableNominalSampleRates,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain)
-        var size: UInt32 = 0
-        guard AudioObjectGetPropertyDataSize(id, &addr, 0, nil, &size) == noErr, size > 0 else { return nil }
-        var ranges = [AudioValueRange](repeating: AudioValueRange(),
-                                       count: Int(size) / MemoryLayout<AudioValueRange>.size)
-        guard AudioObjectGetPropertyData(id, &addr, 0, nil, &size, &ranges) == noErr else { return nil }
+        guard let ranges: [AudioValueRange] =
+                readArray(id, kAudioDevicePropertyAvailableNominalSampleRates) else { return nil }
 
         var best: Double?
         for range in ranges {
@@ -135,10 +99,7 @@ enum AudioOutputDevices {
     // MARK: - Per-device queries
 
     private static func hasOutput(_ id: AudioDeviceID) -> Bool {
-        var addr = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyStreamConfiguration,
-            mScope: kAudioObjectPropertyScopeOutput,
-            mElement: kAudioObjectPropertyElementMain)
+        var addr = address(kAudioDevicePropertyStreamConfiguration, scope: kAudioObjectPropertyScopeOutput)
         var size: UInt32 = 0
         guard AudioObjectGetPropertyDataSize(id, &addr, 0, nil, &size) == noErr, size > 0 else { return false }
         let raw = UnsafeMutableRawPointer.allocate(byteCount: Int(size),
@@ -158,24 +119,44 @@ enum AudioOutputDevices {
 
     /// The device's transport (built-in / USB / AirPlay / …).
     static func transportType(_ id: AudioDeviceID) -> UInt32 {
-        var addr = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyTransportType,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain)
-        var transport: UInt32 = 0
-        var size = UInt32(MemoryLayout<UInt32>.size)
-        guard AudioObjectGetPropertyData(id, &addr, 0, nil, &size, &transport) == noErr else { return 0 }
-        return transport
+        read(id, kAudioDevicePropertyTransportType, as: UInt32.self) ?? 0
     }
 
     private static func string(_ id: AudioDeviceID, _ selector: AudioObjectPropertySelector) -> String? {
-        var addr = AudioObjectPropertyAddress(
-            mSelector: selector,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain)
-        var cfString: Unmanaged<CFString>?
-        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
-        guard AudioObjectGetPropertyData(id, &addr, 0, nil, &size, &cfString) == noErr, let cfString else { return nil }
+        guard let cfString = read(id, selector, as: Unmanaged<CFString>?.self) ?? nil else { return nil }
         return cfString.takeRetainedValue() as String
+    }
+
+    // MARK: - Property plumbing
+
+    static func address(_ selector: AudioObjectPropertySelector,
+                        scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal)
+    -> AudioObjectPropertyAddress {
+        AudioObjectPropertyAddress(mSelector: selector, mScope: scope,
+                                   mElement: kAudioObjectPropertyElementMain)
+    }
+
+    /// Read a fixed-size property value. `T` must be a trivial (C-layout) type.
+    private static func read<T>(_ id: AudioObjectID, _ selector: AudioObjectPropertySelector,
+                                as type: T.Type) -> T? {
+        var addr = address(selector)
+        var size = UInt32(MemoryLayout<T>.size)
+        let raw = UnsafeMutablePointer<T>.allocate(capacity: 1)
+        defer { raw.deallocate() }
+        guard AudioObjectGetPropertyData(id, &addr, 0, nil, &size, raw) == noErr else { return nil }
+        return raw.pointee
+    }
+
+    /// Read a variable-length array property. `T` must be a trivial type.
+    private static func readArray<T>(_ id: AudioObjectID,
+                                     _ selector: AudioObjectPropertySelector) -> [T]? {
+        var addr = address(selector)
+        var size: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(id, &addr, 0, nil, &size) == noErr, size > 0 else { return nil }
+        let count = Int(size) / MemoryLayout<T>.stride
+        let raw = UnsafeMutablePointer<T>.allocate(capacity: count)
+        defer { raw.deallocate() }
+        guard AudioObjectGetPropertyData(id, &addr, 0, nil, &size, raw) == noErr else { return nil }
+        return Array(UnsafeBufferPointer(start: raw, count: count))
     }
 }

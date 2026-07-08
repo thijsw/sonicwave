@@ -48,14 +48,7 @@ actor SubsonicClient {
     /// Test a candidate set of credentials without persisting them. Used by the
     /// Settings "Test Connection" button.
     func testConnection(_ candidate: ServerCredentials) async throws(SubsonicError) -> ServerInfo {
-        let request: URLRequest
-        do {
-            request = try buildRequest(for: .ping, using: candidate)
-        } catch let error as SubsonicError {
-            throw error
-        } catch {
-            throw SubsonicError.invalidURL
-        }
+        let request = try buildRequest(for: .ping, using: candidate)
         let wrapper: SubsonicResponseWrapper<EmptyBody> = try await execute(request, method: "ping")
         return wrapper.response.info
     }
@@ -64,32 +57,23 @@ actor SubsonicClient {
     /// transcoding settings (format/maxBitRate) when provided.
     func streamURL(songId: String, format: String? = nil, maxBitRate: Int? = nil,
                    timeOffset: Int? = nil) throws(SubsonicError) -> URL {
-        guard let creds = credentials.load() else { throw SubsonicError.notConfigured }
         var items: [URLQueryItem] = [.init(name: "id", value: songId)]
         if let format { items.append(.init(name: "format", value: format)) }
         if let maxBitRate { items.append(.init(name: "maxBitRate", value: String(maxBitRate))) }
         if let timeOffset { items.append(.init(name: "timeOffset", value: String(timeOffset))) }
-        do {
-            return try url(for: Endpoint("stream", items), using: creds)
-        } catch let error as SubsonicError {
-            throw error
-        } catch {
-            throw SubsonicError.invalidURL
-        }
+        return try authedURL("stream", items)
     }
 
     /// Builds an authenticated cover-art URL for the given id at a target size.
     func coverArtURL(id: String, size: Int? = nil) throws(SubsonicError) -> URL {
-        guard let creds = credentials.load() else { throw SubsonicError.notConfigured }
         var items: [URLQueryItem] = [.init(name: "id", value: id)]
         if let size { items.append(.init(name: "size", value: String(size))) }
-        do {
-            return try url(for: Endpoint("getCoverArt", items), using: creds)
-        } catch let error as SubsonicError {
-            throw error
-        } catch {
-            throw SubsonicError.invalidURL
-        }
+        return try authedURL("getCoverArt", items)
+    }
+
+    private func authedURL(_ method: String, _ items: [URLQueryItem]) throws(SubsonicError) -> URL {
+        guard let creds = credentials.load() else { throw SubsonicError.notConfigured }
+        return try url(for: Endpoint(method, items), using: creds)
     }
 
     // MARK: - Request execution
@@ -98,15 +82,7 @@ actor SubsonicClient {
         _ endpoint: Endpoint
     ) async throws(SubsonicError) -> SubsonicResponseWrapper<Body> {
         guard let creds = credentials.load() else { throw SubsonicError.notConfigured }
-        let request: URLRequest
-        do {
-            request = try buildRequest(for: endpoint, using: creds)
-        } catch let error as SubsonicError {
-            throw error
-        } catch {
-            throw SubsonicError.invalidURL
-        }
-        return try await execute(request, method: endpoint.method)
+        return try await execute(try buildRequest(for: endpoint, using: creds), method: endpoint.method)
     }
 
     private func execute<Body: Decodable & Sendable>(
@@ -137,7 +113,8 @@ actor SubsonicClient {
 
     // MARK: - URL / auth construction
 
-    private func buildRequest(for endpoint: Endpoint, using creds: ServerCredentials) throws -> URLRequest {
+    private func buildRequest(for endpoint: Endpoint,
+                              using creds: ServerCredentials) throws(SubsonicError) -> URLRequest {
         let finalURL = try url(for: endpoint, using: creds)
         var request = URLRequest(url: finalURL)
         request.httpMethod = "GET"
@@ -145,7 +122,7 @@ actor SubsonicClient {
         return request
     }
 
-    private func url(for endpoint: Endpoint, using creds: ServerCredentials) throws -> URL {
+    private func url(for endpoint: Endpoint, using creds: ServerCredentials) throws(SubsonicError) -> URL {
         guard var components = URLComponents(url: creds.baseURL, resolvingAgainstBaseURL: false) else {
             throw SubsonicError.invalidURL
         }

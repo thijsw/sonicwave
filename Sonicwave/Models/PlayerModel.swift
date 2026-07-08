@@ -14,7 +14,6 @@ import Observation
 final class PlayerModel {
     private(set) var currentTrack: Song?
     private(set) var queue: [Song] = []
-    private(set) var history: [Song] = []
     private(set) var currentIndex: Int?
 
     private(set) var state: PlaybackState = .stopped
@@ -323,7 +322,6 @@ extension PlayerModel {
         guard let index = spanPositions.removeValue(forKey: echo),
               queue.indices.contains(index), index != currentIndex else { return }
         let previous = currentIndex
-        if let current = currentTrack { history.append(current) }
         currentIndex = index
         currentTrack = queue[index]
         duration = TimeInterval(queue[index].duration ?? 0)

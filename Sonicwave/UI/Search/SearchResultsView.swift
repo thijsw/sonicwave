@@ -27,7 +27,7 @@ struct SearchResultsView: View {
                         Divider()
                     }
                     if !results.albums.isEmpty {
-                        albumsShelf
+                        AlbumShelf(albums: results.albums)
                         Divider()
                     }
                     if !results.songs.isEmpty {
@@ -56,49 +56,16 @@ struct SearchResultsView: View {
     /// Matching artists as a shelf of circular portraits; selecting one pushes
     /// the artist's albums (same destination as the Artists section).
     private var artistsShelf: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Artists").font(.headline)
-                .padding(.horizontal).padding(.top, 10)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 14) {
-                    ForEach(results.artists) { artist in
-                        Button { navigator.openArtist(artist) } label: {
-                            VStack(spacing: 6) {
-                                ArtworkView(coverArt: artist.coverArt, size: 64, cornerRadius: 32)
-                                Text(artist.name).font(.caption).lineLimit(1)
-                            }
-                            .frame(width: 90)
-                        }
-                        .buttonStyle(.plain)
+        Shelf(title: "Artists") {
+            ForEach(results.artists) { artist in
+                Button { navigator.openArtist(artist) } label: {
+                    VStack(spacing: 6) {
+                        ArtworkView(coverArt: artist.coverArt, size: 64, cornerRadius: 32)
+                        Text(artist.name).font(.caption).lineLimit(1)
                     }
+                    .frame(width: 90)
                 }
-                .padding(.horizontal).padding(.bottom, 10)
-            }
-        }
-    }
-
-    /// Matching albums as a cover shelf, identical to the Favorites shelf;
-    /// selecting one pushes the album's track list.
-    private var albumsShelf: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Albums").font(.headline)
-                .padding(.horizontal).padding(.top, 10)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 14) {
-                    ForEach(results.albums) { album in
-                        Button { navigator.openAlbum(album) } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                ArtworkView(coverArt: album.coverArt, size: 110, cornerRadius: 8)
-                                Text(album.name).font(.caption).lineLimit(1)
-                                Text(album.artist ?? "—").font(.caption2)
-                                    .foregroundStyle(.secondary).lineLimit(1)
-                            }
-                            .frame(width: 110, alignment: .leading)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal).padding(.bottom, 10)
+                .buttonStyle(.plain)
             }
         }
     }

@@ -7,7 +7,6 @@ import SwiftUI
 struct AlbumDetailView: View {
     let album: Album
     @Environment(LibraryModel.self) private var library
-    @Environment(PlayerModel.self) private var player
     @Environment(Navigator.self) private var navigator
     @State private var tracks: [Song] = []
     @State private var starredOverride: Bool?
@@ -54,15 +53,7 @@ struct AlbumDetailView: View {
                 Text(album.artist ?? "—").foregroundStyle(.secondary)
                 Text(subtitle).font(.callout).foregroundStyle(.secondary)
                 HStack {
-                    Button {
-                        player.play(tracks: tracks)
-                    } label: { Label("Play", systemImage: "play.fill") }
-                    .disabled(tracks.isEmpty)
-
-                    Button {
-                        player.play(tracks: tracks.shuffled())
-                    } label: { Label("Shuffle", systemImage: "shuffle") }
-                    .disabled(tracks.isEmpty)
+                    PlayShuffleButtons(tracks: tracks)
 
                     Button {
                         let new = !isStarred
@@ -84,12 +75,8 @@ struct AlbumDetailView: View {
     }
 
     private var subtitle: String {
-        var parts: [String] = []
-        if let year = album.year { parts.append(String(year)) }
-        let count = tracks.count
-        parts.append("\(count) song\(count == 1 ? "" : "s")")
-        let total = tracks.reduce(0) { $0 + ($1.duration ?? 0) }
-        if total > 0 { parts.append(formatTime(total)) }
-        return parts.joined(separator: " · ")
+        let summary = trackSummary(tracks)
+        guard let year = album.year else { return summary }
+        return "\(year) · \(summary)"
     }
 }

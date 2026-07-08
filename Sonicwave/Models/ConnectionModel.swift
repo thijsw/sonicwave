@@ -85,37 +85,36 @@ final class ConnectionModel {
 
     /// Verify the current form against the server without persisting.
     func testConnection() async {
-        guard let candidate = formCredentials() else {
-            state = .failed("Enter a valid server address (including http:// or https://).")
-            return
-        }
-        state = .connecting
-        do {
-            let info = try await client.testConnection(candidate)
-            state = .connected(info)
-        } catch {
-            state = .failed(error.userMessage)
-        }
+        if let (_, info) = await verifyForm() { state = .connected(info) }
     }
 
     /// Test then persist the credentials to the Keychain on success.
     func saveAndConnect() async {
-        guard let candidate = formCredentials() else {
-            state = .failed("Enter a valid server address (including http:// or https://).")
-            return
-        }
-        state = .connecting
+        guard let (candidate, info) = await verifyForm() else { return }
         do {
-            let info = try await client.testConnection(candidate)
             try credentials.save(candidate)
             persistTranscodePrefs()
             // Re-scope the artwork cache to the (possibly new) server.
             ArtworkCache.shared.setServer(baseURL: candidate.baseURL)
             state = .connected(info)
-        } catch let error as SubsonicError {
-            state = .failed(error.userMessage)
         } catch {
             state = .failed(error.localizedDescription)
+        }
+    }
+
+    /// Shared preamble of the two calls above: validate the form fields and
+    /// verify them against the server, reporting failures via `state`.
+    private func verifyForm() async -> (ServerCredentials, ServerInfo)? {
+        guard let candidate = formCredentials() else {
+            state = .failed("Enter a valid server address (including http:// or https://).")
+            return nil
+        }
+        state = .connecting
+        do {
+            return (candidate, try await client.testConnection(candidate))
+        } catch {
+            state = .failed(error.userMessage)
+            return nil
         }
     }
 

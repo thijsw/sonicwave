@@ -132,10 +132,7 @@ struct NowPlayingPanel: View {
 /// elapsed/total times and a prominent transport cluster — the panel's
 /// centerpiece.
 private struct CurrentTrackCard: View {
-    @Environment(PlayerModel.self) private var player
     let song: Song
-    /// In-progress scrub position; seek once on release (see docs/03).
-    @State private var scrubValue: Double?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -174,38 +171,11 @@ private struct CurrentTrackCard: View {
                         .padding(.top, 7)
                 }
 
-                // Scrubber + times.
-                SlimSlider(
-                    value: Binding(
-                        get: { scrubValue ?? player.position },
-                        set: { scrubValue = $0 }
-                    ),
-                    range: 0...max(player.duration, 1),
-                    fill: .accentColor,
-                    trackHeight: 5,
-                    thumbSize: 12,
-                    accessibilityValueText:
-                        "\(formatTime(scrubValue ?? player.position)) of \(formatTime(player.duration))"
-                ) { editing in
-                    if !editing, let value = scrubValue {
-                        player.seek(to: value)
-                        scrubValue = nil
-                    }
-                }
-                .accessibilityLabel("Playback position")
-                .padding(.top, 12)
+                // Scrubber + times, then the transport cluster.
+                ScrubberBar()
+                    .padding(.top, 12)
 
-                HStack {
-                    Text(formatTime(scrubValue ?? player.position))
-                    Spacer()
-                    Text(formatTime(player.duration))
-                }
-                .font(.caption)
-                .monospacedDigit()
-                .foregroundStyle(.tertiary)
-                .padding(.top, 2)
-
-                transport
+                TransportCluster(size: .panel)
                     .padding(.top, 10)
                     .frame(maxWidth: .infinity)
             }
@@ -213,60 +183,6 @@ private struct CurrentTrackCard: View {
             .padding(.top, 14)
             .padding(.bottom, 14)
         }
-    }
-
-    /// Shuffle · prev / play / next · repeat — larger than the toolbar cluster,
-    /// with the play button as the one prominent (accent-filled) control and
-    /// shuffle/repeat as subordinate toggles (accent when active), Music-style.
-    private var transport: some View {
-        HStack(spacing: 20) {
-            Button { player.shuffle.toggle() } label: {
-                Image(systemName: "shuffle")
-                    .font(.system(size: 13))
-                    .frame(width: 28, height: 28)
-                    .contentShape(Circle())
-            }
-            .foregroundStyle(player.shuffle ? Color.accentColor : Color.secondary)
-            .accessibilityLabel("Shuffle")
-
-            Button { player.previous() } label: {
-                Image(systemName: "backward.fill")
-                    .font(.system(size: 18))
-                    .frame(width: 36, height: 36)
-                    .contentShape(Circle())
-            }
-            .accessibilityLabel("Previous")
-
-            Button { player.togglePlayPause() } label: {
-                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 19))
-                    .foregroundStyle(.white)
-                    .frame(width: 48, height: 48)
-                    .background(Color.accentColor, in: Circle())
-                    .shadow(color: .accentColor.opacity(0.45), radius: 6, y: 3)
-                    .contentShape(Circle())
-            }
-            .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
-
-            Button { player.next() } label: {
-                Image(systemName: "forward.fill")
-                    .font(.system(size: 18))
-                    .frame(width: 36, height: 36)
-                    .contentShape(Circle())
-            }
-            .accessibilityLabel("Next")
-
-            Button { player.cycleRepeat() } label: {
-                Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat")
-                    .font(.system(size: 13))
-                    .frame(width: 28, height: 28)
-                    .contentShape(Circle())
-            }
-            .foregroundStyle(player.repeatMode != .off ? Color.accentColor : Color.secondary)
-            .accessibilityLabel("Repeat")
-        }
-        .buttonStyle(.borderless)
-        .foregroundStyle(.primary)
     }
 }
 

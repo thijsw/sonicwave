@@ -93,7 +93,6 @@ struct RandomSongsBody: Decodable, Sendable {
 
 struct Starred2Body: Decodable, Sendable {
     struct Container: Decodable, Sendable {
-        var artist: [Artist]?
         var album: [Album]?
         var song: [Song]?
     }
@@ -116,9 +115,4 @@ struct PlaylistsBody: Decodable, Sendable {
 
 struct PlaylistBody: Decodable, Sendable {
     var playlist: Playlist
-}
-
-struct OpenSubsonicExtensionsBody: Decodable, Sendable {
-    struct Extension: Decodable, Sendable { var name: String; var versions: [Int]? }
-    var openSubsonicExtensions: [Extension]?
 }

@@ -14,7 +14,6 @@ struct Endpoint: Sendable {
 
     // MARK: Connection
     static let ping = Endpoint("ping")
-    static let openSubsonicExtensions = Endpoint("getOpenSubsonicExtensions")
 
     // MARK: Library
     static func albumList2(type: String, size: Int, offset: Int) -> Endpoint {

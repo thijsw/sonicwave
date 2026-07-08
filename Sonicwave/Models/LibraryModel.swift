@@ -32,7 +32,6 @@ final class LibraryModel {
 
     private(set) var starredSongs: [Song] = []
     private(set) var starredAlbums: [Album] = []
-    private(set) var starredArtists: [Artist] = []
 
     private(set) var playlists: [Playlist] = []
 
@@ -54,7 +53,6 @@ final class LibraryModel {
         genres = []
         starredSongs = []
         starredAlbums = []
-        starredArtists = []
     }
 
     // MARK: - Albums (paginated)
@@ -143,14 +141,13 @@ final class LibraryModel {
     // MARK: - Favorites
 
     func loadStarredIfNeeded() async {
-        guard starredSongs.isEmpty, starredAlbums.isEmpty, starredArtists.isEmpty else { return }
+        guard starredSongs.isEmpty, starredAlbums.isEmpty else { return }
         await reloadStarred()
     }
 
     func reloadStarred() async {
         do {
             let body = try await client.send(.starred2, as: Starred2Body.self)
-            starredArtists = body.starred2.artist ?? []
             starredAlbums = body.starred2.album ?? []
             starredSongs = body.starred2.song ?? []
         } catch {

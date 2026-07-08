@@ -7,7 +7,6 @@ import SwiftUI
 struct PlaylistDetailView: View {
     let playlistID: String
     @Environment(LibraryModel.self) private var library
-    @Environment(PlayerModel.self) private var player
     @State private var playlist: Playlist?
     @State private var renameText = ""
     @State private var showRename = false
@@ -53,19 +52,9 @@ struct PlaylistDetailView: View {
             ArtworkView(coverArt: playlist.coverArt, size: 96, cornerRadius: 8)
             VStack(alignment: .leading, spacing: 6) {
                 Text(playlist.name).font(.title2).bold()
-                Text(subtitle(playlist)).foregroundStyle(.secondary)
-                HStack {
-                    Button {
-                        player.play(tracks: tracks)
-                    } label: { Label("Play", systemImage: "play.fill") }
-                    .disabled(tracks.isEmpty)
-
-                    Button {
-                        player.play(tracks: tracks.shuffled())
-                    } label: { Label("Shuffle", systemImage: "shuffle") }
-                    .disabled(tracks.isEmpty)
-                }
-                .padding(.top, 4)
+                Text(trackSummary(tracks)).foregroundStyle(.secondary)
+                HStack { PlayShuffleButtons(tracks: tracks) }
+                    .padding(.top, 4)
             }
             Spacer()
 
@@ -86,14 +75,6 @@ struct PlaylistDetailView: View {
             .help("Playlist Options")
         }
         .padding()
-    }
-
-    private func subtitle(_ playlist: Playlist) -> String {
-        let count = tracks.count
-        let songs = "\(count) song\(count == 1 ? "" : "s")"
-        let total = tracks.reduce(0) { $0 + ($1.duration ?? 0) }
-        guard total > 0 else { return songs }
-        return "\(songs) · \(formatTime(total))"
     }
 
     // MARK: - Edits
