@@ -2,6 +2,12 @@ excluded:
   - DerivedData
   - .build
 
+# PlayerModel.swift carries the queue/transport core plus the restore hook;
+# separable subsystems already live in extension files (+RemoteCommands,
+# +Scrobbling, +PlayQueue). A modest bump beats leaking private state.
+file_length:
+  warning: 450
+
 identifier_name:
   excluded:
     - id

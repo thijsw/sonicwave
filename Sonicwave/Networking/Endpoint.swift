@@ -63,6 +63,21 @@ struct Endpoint: Sendable {
         ])
     }
 
+    // MARK: Play queue
+    /// Persist playback state server-side: the queue, the current song, and
+    /// the playhead (ms). Survives relaunch and enables cross-device resume.
+    /// The id list grows with the queue → formPost when available.
+    static func savePlayQueue(ids: [String], current: String?, positionMs: Int) -> Endpoint {
+        var items: [URLQueryItem] = ids.map { .init(name: "id", value: $0) }
+        if let current {
+            items.append(.init(name: "current", value: current))
+            items.append(.init(name: "position", value: String(positionMs)))
+        }
+        return Endpoint("savePlayQueue", items, usesFormPost: true)
+    }
+
+    static let playQueue = Endpoint("getPlayQueue")
+
     // MARK: Scrobbling
     /// `submission: false` reports "now playing"; `true` records the play
     /// (Navidrome play counts / external scrobblers).

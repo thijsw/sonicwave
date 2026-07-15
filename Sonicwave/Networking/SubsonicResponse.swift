@@ -129,3 +129,29 @@ struct OpenSubsonicExtensionsBody: Decodable, Sendable {
     struct Extension: Decodable, Sendable { var name: String; var versions: [Int]? }
     var openSubsonicExtensions: [Extension]?
 }
+
+struct PlayQueueBody: Decodable, Sendable {
+    var playQueue: PlayQueue?
+}
+
+struct PlayQueue: Decodable, Sendable {
+    var entry: [Song]?
+    /// Id of the current song. Navidrome sends a string id; classic
+    /// Subsonic servers send a number — accept both.
+    var current: String?
+    /// Playhead within the current song, in milliseconds.
+    var position: Int?
+
+    private enum CodingKeys: String, CodingKey { case entry, current, position }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        entry = try container.decodeIfPresent([Song].self, forKey: .entry)
+        position = try container.decodeIfPresent(Int.self, forKey: .position)
+        if let text = try? container.decodeIfPresent(String.self, forKey: .current) {
+            current = text
+        } else if let number = try? container.decodeIfPresent(Int.self, forKey: .current) {
+            current = String(number)
+        }
+    }
+}

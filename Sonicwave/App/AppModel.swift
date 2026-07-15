@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 
@@ -54,11 +55,40 @@ final class AppModel {
                                   scrobbler: { id, submission in
             // Best-effort: a failed scrobble should never surface in the UI.
             _ = try? await client.sendStatus(.scrobble(id: id, submission: submission))
+        },
+                                  queueStore: { snapshot in
+            // Best-effort, like scrobbles: a failed save never surfaces.
+            _ = try? await client.sendStatus(.savePlayQueue(
+                ids: snapshot.songIds, current: snapshot.currentId,
+                positionMs: snapshot.positionMs))
         })
 
         // Give the shared artwork cache access to the authenticated client, and
         // scope it to the current server so artwork never mixes across servers.
         ArtworkCache.shared.clientBox = ClientBox(client)
         ArtworkCache.shared.setServer(baseURL: credentials.load()?.baseURL)
+
+        // Bring back the last session's queue (paused; never interrupts).
+        Task { await restorePlayQueue() }
+        // Final snapshot on quit — best-effort (pause/track-change saves are
+        // the reliable ones; this catches the played-through-then-quit case).
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification, object: nil, queue: .main
+        ) { [weak player] _ in
+            MainActor.assumeIsolated { player?.saveQueueIfNeeded(force: true) }
+        }
+    }
+
+    /// Fetch the server-saved play queue and hand it to the player, restored
+    /// paused at the saved playhead. Silently does nothing when no server is
+    /// configured, the server has no saved queue, or playback already started.
+    private func restorePlayQueue() async {
+        guard await client.isConfigured,
+              let body = try? await client.send(.playQueue, as: PlayQueueBody.self),
+              let entries = body.playQueue?.entry, !entries.isEmpty else { return }
+        let index = body.playQueue?.current
+            .flatMap { id in entries.firstIndex { $0.id == id } } ?? 0
+        let position = TimeInterval(body.playQueue?.position ?? 0) / 1000
+        player.restoreQueue(entries, currentIndex: index, position: position)
     }
 }

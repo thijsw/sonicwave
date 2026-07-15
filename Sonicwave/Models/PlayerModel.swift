@@ -60,14 +60,40 @@ final class PlayerModel {
     @ObservationIgnored let scrobbler: (@Sendable (String, Bool) async -> Void)?
     /// The current track's play has been recorded (once per track start).
     @ObservationIgnored var submittedScrobble = false
+    // Internal (not private): play-queue persistence lives in
+    // PlayerModel+PlayQueue.swift.
+    /// Persists the play queue server-side (`savePlayQueue`). Injected by
+    /// AppModel; nil in tests.
+    @ObservationIgnored let queueStore: (@Sendable (PlayQueueSnapshot) async -> Void)?
+    /// Wall-clock throttle for the periodic (position-driven) queue saves.
+    @ObservationIgnored var lastQueueSave: Date = .distantPast
+    /// Where a restored queue resumes; consumed by the next stopped→play.
+    @ObservationIgnored private var resumePosition: TimeInterval = 0
 
     init(playback: PlaybackService? = nil, nowPlaying: NowPlayingCenter? = nil,
-         scrobbler: (@Sendable (String, Bool) async -> Void)? = nil) {
+         scrobbler: (@Sendable (String, Bool) async -> Void)? = nil,
+         queueStore: (@Sendable (PlayQueueSnapshot) async -> Void)? = nil) {
         self.playback = playback
         self.nowPlaying = nowPlaying
         self.scrobbler = scrobbler
+        self.queueStore = queueStore
         if let playback { startEventLoop(playback) }
         wireRemoteCommands()
+    }
+
+    /// Adopt a previously saved queue without starting playback: the queue,
+    /// current track and playhead reappear paused, exactly as left. No-op
+    /// once anything is queued or playing (a restore never interrupts).
+    func restoreQueue(_ tracks: [Song], currentIndex index: Int, position restored: TimeInterval) {
+        guard queue.isEmpty, state == .stopped, tracks.indices.contains(index) else { return }
+        queue = tracks
+        unshuffledOrder = tracks
+        currentIndex = index
+        currentTrack = tracks[index]
+        duration = TimeInterval(tracks[index].duration ?? 0)
+        position = max(0, min(restored, duration))
+        resumePosition = position
+        updateNowPlayingTrack()
     }
 
     // MARK: - Start / enqueue
@@ -164,13 +190,15 @@ extension PlayerModel {
         case .playing:
             state = .paused
             forward { await $0.pause() }
+            saveQueueIfNeeded(force: true)
         case .paused:
             state = .playing
             forward { await $0.resume() }
         case .stopped:
             guard currentTrack != nil else { return }
             state = .playing
-            startCurrent()
+            startCurrent(from: resumePosition)
+            resumePosition = 0
         case .buffering:
             break
         }
@@ -225,6 +253,7 @@ extension PlayerModel {
         duration = TimeInterval(queue[index].duration ?? 0)
         position = 0
         scrobbleTrackStarted()
+        saveQueueIfNeeded(force: true)
     }
 
     /// Manual skip: hard-restart playback at `index` (a brief gap is expected).
@@ -311,6 +340,7 @@ extension PlayerModel {
             if dur > 0 { duration = dur }
             nowPlaying?.updateProgress(position: position, duration: duration, state: state)
             scrobbleIfPlayedEnough()
+            saveQueueIfNeeded()
         case let .trackChanged(index):
             gaplessAdvance(to: index)
         case let .wantNext(afterIndex):
@@ -342,6 +372,7 @@ extension PlayerModel {
         duration = TimeInterval(queue[index].duration ?? 0)
         position = 0
         scrobbleTrackStarted()
+        saveQueueIfNeeded(force: true)
         // The span that just finished is done — drop its stale mapping.
         if let previous {
             spanPositions = spanPositions.filter { $0.value != previous }
