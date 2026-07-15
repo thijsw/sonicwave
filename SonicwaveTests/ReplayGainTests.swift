@@ -48,6 +48,21 @@ struct ReplayGainTests {
         #expect(ReplayGainMode.track.linearGain(for: info(trackGain: 40)) == 4)
     }
 
+    @Test func transcodeRetryDecisionIsFirstTimeCurrentTrackOnly() {
+        // Retry: first failure, current track, user transcoding off.
+        #expect(PlaybackService.shouldRetryViaTranscode(
+            alreadyForced: false, timelineStart: true, userFormat: nil))
+        // Never loop a retry that itself failed.
+        #expect(!PlaybackService.shouldRetryViaTranscode(
+            alreadyForced: true, timelineStart: true, userFormat: nil))
+        // Pre-buffered followers keep the existing (silent) behavior.
+        #expect(!PlaybackService.shouldRetryViaTranscode(
+            alreadyForced: false, timelineStart: false, userFormat: nil))
+        // The user already transcodes — a failure isn't a format problem.
+        #expect(!PlaybackService.shouldRetryViaTranscode(
+            alreadyForced: false, timelineStart: true, userFormat: "opus"))
+    }
+
     @Test func songDecodesReplayGainTags() throws {
         let json = Data("""
         {"id":"s1","title":"T","replayGain":

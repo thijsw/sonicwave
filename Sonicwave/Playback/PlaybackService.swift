@@ -57,6 +57,9 @@ actor PlaybackService {
         let seekBase: TimeInterval
         /// Linear ReplayGain multiplier baked into this span's buffers.
         let gain: Float
+        /// This span streams via forced server transcoding (a decode-failure
+        /// retry) — seeks must stay on the transcoded stream.
+        let forceTranscode: Bool
         var startFrame: AVAudioFramePosition
         var frameCount: AVAudioFramePosition
         var decodeComplete: Bool
@@ -72,6 +75,7 @@ actor PlaybackService {
         let gain: Float
         let gen: Int
         let timelineStart: Bool
+        var forceTranscode = false
     }
 
     private var spans: [TrackSpan] = []
@@ -148,7 +152,7 @@ extension PlaybackService {
     /// Hard-start a track from `time` seconds in (default 0). Resets the gapless
     /// timeline. Used for first play, manual skip and seek.
     func play(songId: String, suffix: String?, duration: TimeInterval, index: Int,
-              from time: TimeInterval = 0, gain: Float = 1) {
+              from time: TimeInterval = 0, gain: Float = 1, forceTranscode: Bool = false) {
         generation += 1
         let gen = generation
         hardReset()
@@ -158,7 +162,8 @@ extension PlaybackService {
         emit(.stateChanged(.buffering))
         if time > 0 { emit(.position(time: time, duration: duration)) }
         startDecode(DecodeRequest(songId: songId, suffix: suffix, duration: duration, index: index,
-                                  seekBase: time, gain: gain, gen: gen, timelineStart: true))
+                                  seekBase: time, gain: gain, gen: gen, timelineStart: true,
+                                  forceTranscode: forceTranscode))
     }
 
     /// Provide the next track to pre-buffer (reply to `.wantNext`).
@@ -216,6 +221,7 @@ extension PlaybackService {
         // Begin a new span starting at the current end of the scheduled timeline.
         let span = TrackSpan(id: request.songId, index: request.index, duration: request.duration,
                              seekBase: request.seekBase, gain: request.gain,
+                             forceTranscode: request.forceTranscode,
                              startFrame: cumulativeFrames, frameCount: 0, decodeComplete: false)
         if request.gain != 1 {
             Self.log.info("replaygain \(request.gain, privacy: .public) for \(request.songId, privacy: .public)")
@@ -229,19 +235,10 @@ extension PlaybackService {
     }
 
     private func runDecode(_ request: DecodeRequest, spanArrayIndex: Int) async {
-        let (seekBase, gen) = (request.seekBase, request.gen)
-        let prefs = TranscodePrefs.current()
-        // Server-side `timeOffset` only seeks *transcoded* streams; for original
-        // files the server ignores it (plays from the start), so we instead decode
-        // from 0 and discard output up to the seek point.
-        let transcoding = prefs.format != nil
-        let serverOffset = (transcoding && seekBase > 0) ? Int(seekBase) : nil
-        let skipSeconds = (!transcoding && seekBase > 0) ? seekBase : 0
-
-        let url: URL
+        let gen = request.gen
+        let (url, skipSeconds): (URL, TimeInterval)
         do {
-            url = try await client.streamURL(songId: request.songId, format: prefs.format,
-                                             maxBitRate: prefs.maxBitRate, timeOffset: serverOffset)
+            (url, skipSeconds) = try await streamTarget(for: request)
         } catch {
             if gen == generation { emit(.failed(error.userMessage)) }
             return
@@ -270,6 +267,20 @@ extension PlaybackService {
             }
         }
 
+        await pump(url: url, into: source, gen: gen)
+        source.finish()
+        _ = await consume.value
+        if gen == generation, let message = source.failureMessage {
+            if retryViaTranscode(request) { return }
+            emit(.failed(message))
+        }
+        decodeComplete(spanArrayIndex: spanArrayIndex, gen: gen, request: request)
+    }
+
+    /// Stream the URL's bytes into the decoder, bounded by the read-ahead
+    /// throttle; stops early on cancellation, a newer timeline, or a decoder
+    /// that has already declared the stream undecodable.
+    private func pump(url: URL, into source: ProgressiveAudioSource, gen: Int) async {
         let loader = DataStreamLoader()
         do {
             for try await chunk in loader.stream(from: url) {
@@ -278,7 +289,7 @@ extension PlaybackService {
                 if gen != generation || Task.isCancelled { break }
                 source.parse(chunk)
                 // Undecodable stream (e.g. AAC-in-MP4): no point downloading
-                // the rest; the failure surfaces after finish() below.
+                // the rest; the failure surfaces after finish().
                 if source.failureMessage != nil { break }
             }
         } catch {
@@ -286,12 +297,47 @@ extension PlaybackService {
                 emit(.failed((error as? SubsonicError)?.userMessage ?? error.localizedDescription))
             }
         }
-        source.finish()
-        _ = await consume.value
-        if gen == generation, let message = source.failureMessage {
-            emit(.failed(message))
-        }
-        decodeComplete(spanArrayIndex: spanArrayIndex, index: request.index, gen: gen)
+    }
+
+    /// Resolve the stream URL and the client-side skip for a request.
+    /// A decode-failure retry forces transcoding regardless of the user
+    /// preference (mp3 — every server encodes it). Server-side `timeOffset`
+    /// only seeks *transcoded* streams; for original files the server ignores
+    /// it (plays from the start), so those decode from 0 and discard output
+    /// up to the seek point instead.
+    private func streamTarget(for request: DecodeRequest) async throws(SubsonicError)
+        -> (url: URL, skipSeconds: TimeInterval) {
+        let prefs = TranscodePrefs.current()
+        let format = request.forceTranscode ? (prefs.format ?? "mp3") : prefs.format
+        let transcoding = format != nil
+        let seekBase = request.seekBase
+        let url = try await client.streamURL(
+            songId: request.songId, format: format, maxBitRate: prefs.maxBitRate,
+            timeOffset: (transcoding && seekBase > 0) ? Int(seekBase) : nil)
+        return (url, (!transcoding && seekBase > 0) ? seekBase : 0)
+    }
+
+    /// One retry via forced server transcoding before surfacing a decode
+    /// failure: formats CoreAudio can't decode (Ogg Vorbis, cookie-dependent
+    /// MP4) usually CAN be transcoded server-side — so do that, instead of
+    /// telling the user to. Only for the current (timeline-starting) track,
+    /// only once, and only when the user isn't already transcoding.
+    private func retryViaTranscode(_ request: DecodeRequest) -> Bool {
+        guard Self.shouldRetryViaTranscode(alreadyForced: request.forceTranscode,
+                                           timelineStart: request.timelineStart,
+                                           userFormat: TranscodePrefs.current().format) else { return false }
+        Self.log.info("decode failed for \(request.songId, privacy: .public); retrying via server transcoding")
+        play(songId: request.songId, suffix: request.suffix, duration: request.duration,
+             index: request.index, from: request.seekBase, gain: request.gain,
+             forceTranscode: true)
+        return true
+    }
+
+    /// Pure decision (unit-tested): retry only a first, non-forced, current-
+    /// track failure while the user's own transcoding is off.
+    static func shouldRetryViaTranscode(alreadyForced: Bool, timelineStart: Bool,
+                                        userFormat: String?) -> Bool {
+        !alreadyForced && timelineStart && userFormat == nil
     }
 
     // MARK: - Bounded read-ahead
@@ -438,7 +484,8 @@ extension PlaybackService {
         guard let active else { return }
         Self.log.info("recovering playback (force=\(force, privacy: .public)) at \(position, privacy: .public)s")
         play(songId: active.id, suffix: nil, duration: active.duration,
-             index: active.index, from: position)
+             index: active.index, from: position, gain: active.gain,
+             forceTranscode: active.forceTranscode)
         if wasPaused { pause() }
     }
 
@@ -529,10 +576,11 @@ extension PlaybackService {
         emit(.stateChanged(.playing))
     }
 
-    private func decodeComplete(spanArrayIndex: Int, index: Int, gen: Int) {
+    private func decodeComplete(spanArrayIndex: Int, gen: Int, request: DecodeRequest) {
         guard gen == generation, spans.indices.contains(spanArrayIndex) else { return }
         spans[spanArrayIndex].decodeComplete = true
         if spans[spanArrayIndex].frameCount == 0 && spans.count == 1 {
+            if retryViaTranscode(request) { return }
             emit(.failed("Could not decode this track."))
             emit(.stateChanged(.stopped))
             return
@@ -543,7 +591,7 @@ extension PlaybackService {
         }
         // Ready to pre-buffer the successor of this track.
         awaitingNext = true
-        emit(.wantNext(afterIndex: index))
+        emit(.wantNext(afterIndex: request.index))
     }
 
     private func bufferCompleted(gen: Int) {
@@ -574,7 +622,7 @@ extension PlaybackService {
     func seek(to time: TimeInterval) {
         guard let active = activeSpan() else { return }
         play(songId: active.id, suffix: nil, duration: active.duration, index: active.index,
-             from: time, gain: active.gain)
+             from: time, gain: active.gain, forceTranscode: active.forceTranscode)
     }
 
     // MARK: - Position / boundary detection
