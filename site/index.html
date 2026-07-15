@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sonicwave — a native macOS player for your own music server</title>
+<meta name="description" content="Sonicwave is a native, audiophile-grade macOS music player for OpenSubsonic and Navidrome servers. Gapless playback, sample-rate matching, no Electron.">
+<meta property="og:title" content="Sonicwave">
+<meta property="og:description" content="A native macOS music player for your own OpenSubsonic server.">
+<meta property="og:image" content="assets/screenshot.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0b0d'/%3E%3Cpath d='M5 16h3l2-6 3 12 3-16 3 20 3-14 2 4h3' fill='none' stroke='%23ff453a' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Doto:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="nav">
+  <a class="wordmark" href="#">
+    <svg viewBox="0 0 32 32" width="22" height="22" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#1a1a1e"/><path d="M5 16h3l2-6 3 12 3-16 3 20 3-14 2 4h3" fill="none" stroke="#ff453a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Sonicwave
+  </a>
+  <nav>
+    <a href="#audio">Audio</a>
+    <a href="#library">Library</a>
+    <a href="#install">Install</a>
+    <a class="nav-gh" href="https://github.com/thijsw/sonicwave">GitHub</a>
+  </nav>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="lcd" role="img" aria-label="Playback display showing Maxwell's Silver Hammer by The Beatles">
+      <div class="lcd-glass">
+        <span class="lcd-note">♪</span>
+        <div class="lcd-text">
+          <span class="lcd-title">MAXWELL&rsquo;S SILVER HAMMER</span>
+          <span class="lcd-artist">THE BEATLES — ABBEY ROAD</span>
+        </div>
+        <span class="lcd-time" id="lcd-time">1:29</span>
+        <div class="lcd-progress"><span id="lcd-bar"></span></div>
+      </div>
+    </div>
+
+    <p class="eyebrow">For macOS 15+ &nbsp;·&nbsp; OpenSubsonic / Navidrome</p>
+    <h1>Your music server<br>deserves a <em>real</em> Mac&nbsp;app.</h1>
+    <p class="lede">The interaction design iTunes got right — a dense sortable track list, a column
+    browser, Up Next, fast search — rebuilt as a modern, restrained Mac app.
+    Streaming-only, audiophile-grade playback, <strong>no Electron in sight</strong>.</p>
+
+    <div class="cta">
+      <a class="btn-primary" href="https://github.com/thijsw/sonicwave/releases/latest">
+        <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 12.5V14h12v-1.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Download for macOS <span class="ver">v<span class="app-version">0.1.2</span></span>
+      </a>
+      <a class="btn-ghost" href="https://github.com/thijsw/sonicwave">View source</a>
+    </div>
+    <p class="fineprint">Free &amp; open source · MIT · Zero third-party dependencies</p>
+  </section>
+
+  <section class="shot">
+    <div class="shot-frame">
+      <img src="assets/screenshot.png" width="2000" height="1364"
+           alt="Sonicwave playing Abbey Road: sidebar with library and playlists, a dense sortable track table with quality badges, and a Now Playing panel with artwork and an Up Next queue.">
+    </div>
+  </section>
+
+  <section class="features" id="audio">
+    <div class="section-head reveal">
+      <span class="index">01</span>
+      <h2>Serious about audio</h2>
+    </div>
+    <div class="grid">
+      <article class="reveal">
+        <h3>True gapless playback</h3>
+        <p>Album transitions are seamless by construction — <i>Abbey Road</i> plays the way it was mastered.</p>
+      </article>
+      <article class="reveal">
+        <h3>Sample-rate matching</h3>
+        <p>Audirvana/Roon-style hardware rate switching, on by default. Your DAC runs at each track&rsquo;s native rate; nothing gets resampled.</p>
+      </article>
+      <article class="reveal">
+        <h3>Streaming decode</h3>
+        <p>MP3, FLAC, AAC, WAV, AIFF and more decode as they stream — playback starts fast and memory stays flat.</p>
+      </article>
+      <article class="reveal">
+        <h3>Robust output routing</h3>
+        <p>Pick any output device. Unplug and replug a USB DAC mid-track and playback recovers — your system-default device is never touched.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="features" id="library">
+    <div class="section-head reveal">
+      <span class="index">02</span>
+      <h2>A library you can drive</h2>
+    </div>
+    <div class="grid">
+      <article class="reveal">
+        <h3>A dense, sortable track table</h3>
+        <p>Double-click or <kbd>⏎</kbd> to play, <kbd>⌥</kbd>-double-click to queue next, multi-select, drag to playlists.</p>
+      </article>
+      <article class="reveal">
+        <h3>Column browser &amp; search</h3>
+        <p>Genre → Artist → Album, just like you remember. Global search on <kbd>⌘F</kbd>, quality badges with lossless-first sorting.</p>
+      </article>
+      <article class="reveal">
+        <h3>Playlists that round-trip</h3>
+        <p>Create, rename, reorder, delete — server playlists stay fully in sync. Favorites everywhere, with a ★ column.</p>
+      </article>
+      <article class="reveal">
+        <h3>A proper Mac citizen</h3>
+        <p>Menu-bar player, media keys, Control Center widget, Light/Dark, VoiceOver, state restoration. Sandboxed with a single entitlement.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="spec reveal">
+    <div class="section-head">
+      <span class="index">03</span>
+      <h2>Spec sheet</h2>
+    </div>
+    <dl>
+      <div><dt>Version</dt><dd><span class="app-version">0.1.2</span></dd></div>
+      <div><dt>Platform</dt><dd>macOS 15 Sequoia or later</dd></div>
+      <div><dt>Server</dt><dd>OpenSubsonic — Navidrome, Gonic, LMS, Astiga, …</dd></div>
+      <div><dt>Formats</dt><dd>FLAC · MP3 · AAC · WAV · AIFF · more</dd></div>
+      <div><dt>Engine</dt><dd>Swift 6, strict concurrency, AppKit-core track table</dd></div>
+      <div><dt>Dependencies</dt><dd>Apple frameworks only — zero third-party</dd></div>
+      <div><dt>Distribution</dt><dd>Free direct download · Mac App Store in progress</dd></div>
+      <div><dt>License</dt><dd>MIT</dd></div>
+    </dl>
+  </section>
+
+  <section class="install reveal" id="install">
+    <div class="section-head">
+      <span class="index">04</span>
+      <h2>Up and running in a minute</h2>
+    </div>
+    <ol class="steps">
+      <li>
+        <h3>Download</h3>
+        <p>Grab <code>Sonicwave-<span class="app-version">0.1.2</span>.zip</code> from the <a href="https://github.com/thijsw/sonicwave/releases/latest">latest release</a>, unzip, drop it in <code>/Applications</code>. It opens right away — no security warnings.</p>
+      </li>
+      <li>
+        <h3>Connect</h3>
+        <p>Open <strong>Settings → Connection</strong> (<kbd>⌘,</kbd>), enter your server address and credentials, hit <strong>Test Connection</strong>.</p>
+      </li>
+      <li>
+        <h3>Play</h3>
+        <p>Credentials go straight to the Keychain — your password never travels in a URL. Your whole library, one <kbd>⏎</kbd> away.</p>
+      </li>
+    </ol>
+    <div class="cta center">
+      <a class="btn-primary" href="https://github.com/thijsw/sonicwave/releases/latest">Download Sonicwave</a>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <p>Sonicwave is MIT-licensed and built with Apple frameworks only.</p>
+  <nav>
+    <a href="https://github.com/thijsw/sonicwave">GitHub</a>
+    <a href="https://github.com/thijsw/sonicwave/releases">Releases</a>
+    <a href="https://opensubsonic.netlify.app/">OpenSubsonic</a>
+    <a href="https://www.navidrome.org/">Navidrome</a>
+  </nav>
+</footer>
+
+<script>
+  // LCD: tick the counter and progress from 1:29 toward 3:27, then loop.
+  (function () {
+    var t = 89, total = 207;
+    var time = document.getElementById('lcd-time');
+    var bar = document.getElementById('lcd-bar');
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      bar.style.width = (t / total * 100) + '%';
+      return;
+    }
+    setInterval(function () {
+      t = t >= total ? 0 : t + 1;
+      time.textContent = Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
+      bar.style.width = (t / total * 100) + '%';
+    }, 1000);
+  })();
+
+  // Scroll reveals
+  (function () {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+      });
+    }, { threshold: 0.15 });
+    document.querySelectorAll('.reveal').forEach(function (el) { io.observe(el); });
+  })();
+</script>
+</body>
+</html>
