@@ -50,6 +50,31 @@ xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
 
 ---
 
+## Issue burn-down: #1 #2 #5 #6 (2026-07-15)
+First four tracker issues closed (from the competitive research round):
+- **#2 — plain-HTTP home servers** (`88eaff3`): partial `Info.plist`
+  (repo root; inside `Sonicwave/` the synced group copies it as a bundle
+  resource → warning) merged into the generated one with
+  `NSAllowsLocalNetworking`. Non-local `http://` stays ATS-blocked but now
+  maps to an actionable message (`SubsonicError.transport(from:)`).
+- **#1 — large playlist mutations** (`d1f85cc`): `usesFormPost`-flagged
+  endpoints go as form-encoded POST when the server advertises `formPost`
+  (capability via resurrected `getOpenSubsonicExtensions`, cached per base
+  URL). `+` escaped in bodies — form decoding reads it as a space.
+- **#5 — play-queue persistence** (`671e565`): `savePlayQueue`/
+  `getPlayQueue`; saves forced on pause/track change, 30s-throttled on
+  position ticks, final best-effort on quit; restores paused via
+  `PlayerModel.restoreQueue` (never clobbers an active queue; resume
+  position consumed by the next stopped→play).
+- **#6 — ReplayGain** (`232ea3c`): gain baked into span buffers via
+  `vDSP_vsmul` (one shared gapless node → node volume can't do per-track);
+  peak-clamped dB→linear math on `ReplayGainMode` (unit-tested); Settings →
+  Playback picker; seek preserves the span's gain. Gotcha: `Song` has
+  explicit `CodingKeys` — new decoded fields must be added there or they
+  silently decode as nil.
+- Suite: 67 → **89 tests**. ⏳ Live pass still owed: queue restore + RG
+  audibility against a real Navidrome (unit-level only so far).
+
 ## v0.2.0 released; repo public, website live (2026-07-15)
 - **Released v0.2.0 (build 5)** via `scripts/publish.sh` — notarized,
   Gatekeeper-accepted ("Notarized Developer ID"), tagged, zip attached to

@@ -67,13 +67,17 @@ A generic `SubsonicResponse<T>` decodes the envelope; on
 
 ## Endpoint map (v1)
 
-Grouped by feature. All are `GET` on `/rest/<method>`.
+Grouped by feature. `GET` on `/rest/<method>` — except endpoints flagged
+`usesFormPost` (unbounded id lists: playlist mutations, `savePlayQueue`),
+which go as a form-encoded POST when the server advertises the OpenSubsonic
+`formPost` extension (URL limits bite around ~1,500 song ids; GET fallback
+otherwise; see `SubsonicClient.formPostRequest`).
 
 ### Connection
 - `ping` — connection/auth test.
-- ~~`getOpenSubsonicExtensions`~~ — removed as dead code 2026-07-08; would
-  return if `formPost` support (auth via POST body, out of URLs/server logs)
-  is ever wanted.
+- `getOpenSubsonicExtensions` — capability discovery for the GET-vs-POST
+  decision (resolved lazily, cached per base URL). Removed as dead code
+  2026-07-08, resurrected 2026-07-15 for `formPost`.
 - ~~`getMusicFolders`~~ — not needed; the app queries the whole library.
 - `startScan` — kick off a server-side library rescan (Settings →
   Connection "Scan Library", File → Update Server Library). Fire-and-forget;
@@ -83,6 +87,11 @@ Grouped by feature. All are `GET` on `/rest/<method>`.
   4 minutes (tracks ≥ 30s; the Last.fm rules Navidrome mirrors). Drives the
   server's play counts / recently-played (and the Home shelves). Toggleable
   (Settings → Playback, default on); best-effort, failures never surface.
+- `savePlayQueue` / `getPlayQueue` — the queue, current song and playhead
+  persist server-side (forced on pause/track change, 30s-throttled on
+  position ticks, best-effort like scrobbles) and restore **paused** on
+  launch — cross-device resume for free. Tolerant decode: `current` is a
+  string id on Navidrome, a number on classic Subsonic.
 
 ### Library browse
 - `getAlbumList2` — albums, with `type` (`alphabeticalByName`, `newest`,
