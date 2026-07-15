@@ -37,10 +37,10 @@ assumes `https://` when the scheme is omitted).
 
 `ping` surfaces the capability fields (`openSubsonic`, `serverVersion`,
 `type`) via `ServerInfo`, which `ConnectionModel` keeps on the connected
-state. A `getOpenSubsonicExtensions` endpoint + response body exist (used by
-the live-server tests) but the app doesn't branch on extensions at runtime —
-the auth method is user-chosen and `timeOffset` seeking is handled by the
-transcode-aware seek path in `03`.
+state. The app doesn't branch on extensions at runtime — the auth method is
+user-chosen and `timeOffset` seeking is handled by the transcode-aware seek
+path in `03`. (`getOpenSubsonicExtensions` was removed as dead code
+2026-07-08; see the endpoint map.)
 
 ## Networking client ✅
 

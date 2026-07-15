@@ -43,7 +43,11 @@ start re-derives the timeline format from the track's **native sample rate**
 resample), reconnects the node when the rate differs from the current
 connection, and sets the output device's **nominal hardware rate**
 (`kAudioDevicePropertyNominalSampleRate`, closest supported) to match — so
-nothing resamples between file and DAC. Gapless followers join the running
+nothing resamples between file and DAC. AirPlay transports are the
+exception: they run a fixed network clock, so nominal-rate pokes are
+useless-to-glitchy and the rate switch is skipped (macOS resamples;
+`PlaybackService` checks `kAudioDeviceTransportTypeAirPlay`). Gapless
+followers join the running
 timeline's format (resampled only if they differ, e.g. a mixed-rate queue).
 The device-rate switch fires config-change notifications; those are treated
 as echoes of the deliberate change (see the recovery echo guard). External
@@ -156,6 +160,12 @@ stream (a hard restart on the same path as manual skip):
   transient private aggregates. The picker lives in Settings → Playback
   (System Default + devices; a "(disconnected)" row keeps a vanished choice
   visible).
+- **AirPlay (Tier 1):** connected AirPlay routes are regular Core Audio
+  devices. `AudioDevice.isAirPlay` (transport-type query) lets the picker
+  group them under an `airplay.audio` label, and rate matching skips AirPlay
+  transports (fixed network clock — see the sample-rate section). Caveat:
+  macOS only materializes the device while connected; Control Center owns
+  discovery, and it lists AirPlay 2 receivers only.
 - `PlaybackService.setOutputDevice(uid:)` persists the choice and points the
   output unit at it (`kAudioOutputUnitProperty_CurrentDevice`).
 - Route/config changes: `AVAudioEngineConfigurationChange` **plus** a
@@ -194,6 +204,9 @@ stream (a hard restart on the same path as manual skip):
 and emits an `AsyncStream<PlaybackEvent>` (`.stateChanged`, `.position`,
 `.trackChanged`, `.wantNext`, `.ended`, `.failed`) that `PlayerModel` consumes
 on the main actor and re-publishes for the UI and `NowPlayingCenter`.
+`.failed` carries a user-facing message (undecodable stream, cookie-dependent
+container, server death mid-track); it lands in `PlayerModel.lastError` and
+`RootView` presents it as a dismissable "Can't Play Track" alert.
 
 ## Spike checklist (M4 exit criteria)
 - [x] Gapless verified on a known gapless album — Abbey Road medley, zero

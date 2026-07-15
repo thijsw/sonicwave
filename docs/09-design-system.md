@@ -10,10 +10,9 @@ user likes.
 
 - Current Claude Design project ("Cadence" — drives the dark-mode look, the
   toolbar LCD and the Now Playing panel; its blue accent was deliberately NOT
-  adopted — the app keeps its original red asset-catalog `AccentColor`):
-  <https://claude.ai/design/p/4259233d-5903-4008-9033-2d6d5aedc8be?file=Cadence.dc.html>
-- Earlier inspiration (superseded):
-  <https://claude.ai/design/p/85fd1b9f-877c-44f8-9c76-da2730a695b1?file=Modern+iTunes.dc.html>
+  adopted — the app keeps its original red asset-catalog `AccentColor`).
+  The project is private; access it via the `DesignSync` connector below.
+- Earlier inspiration (superseded): a "Modern iTunes" design project.
 
 ## Connector & access ✅
 

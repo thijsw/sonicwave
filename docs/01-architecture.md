@@ -16,7 +16,8 @@
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  UI  (SwiftUI views, @MainActor)                             │
-│  RootView · SidebarView · TrackTableView/MusicTrackTable ·   │
+│  RootView · SidebarView · HomeView ·                         │
+│  TrackTableView/MusicTrackTable ·                            │
 │  ColumnBrowserView · NowPlayingToolbar · NowPlayingPanel ·   │
 │  MenuBarPanel · SettingsView · SearchResultsView             │
 └───────────────▲─────────────────────────────────────────────┘
@@ -127,7 +128,8 @@ synchronized groups — new files are picked up automatically):
 Sonicwave/
   App/            SonicwaveApp (scenes), AppModel (composition root),
                   SonicwaveCommands (menu bar)
-  Models/         PlayerModel, LibraryModel, ConnectionModel, PlaybackTypes
+  Models/         PlayerModel (+RemoteCommands, +Scrobbling extensions),
+                  LibraryModel, ConnectionModel, PlaybackTypes
   Networking/     Endpoint map, DTOs (SubsonicModels), envelope
                   (SubsonicResponse), SubsonicError
   Playback/       PlaybackService, ProgressiveAudioSource, DataStreamLoader,

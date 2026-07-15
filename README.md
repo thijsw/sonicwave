@@ -14,6 +14,10 @@ Mac app. Streaming-only, audiophile-grade playback, no Electron in sight.
 ![Server](https://img.shields.io/badge/server-OpenSubsonic%20%2F%20Navidrome-8A2BE2)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
+**[Website](https://thijsw.github.io/sonicwave/)** · **[Latest release](https://github.com/thijsw/sonicwave/releases/latest)**
+
+![Sonicwave playing Abbey Road — track table, column browser and Now Playing panel with Up Next](site/assets/app-window.png)
+
 </div>
 
 ---
@@ -33,6 +37,8 @@ and drop `Sonicwave.app` into `/Applications`. Builds are signed and
 **First launch:** open **Settings → Connection** (⌘,), enter your server
 address and credentials, hit **Test Connection** → **Save & Connect**.
 Credentials go straight to the Keychain; your password never travels in a URL.
+No server yet? Click **Use Demo Server** to try Sonicwave against the public
+Navidrome demo.
 
 ## Highlights
 
@@ -42,21 +48,28 @@ Credentials go straight to the Keychain; your password never travels in a URL.
   your DAC runs at each track's native rate, nothing gets resampled.
 - **Streaming decode** of MP3, FLAC, AAC, WAV, AIFF and more — playback
   starts fast and memory stays flat.
-- **Robust output routing**: pick any output device; unplugging or replugging
-  a USB DAC mid-track recovers automatically, and your system-default device
-  is never touched.
+- **Robust output routing**: pick any output device — AirPlay routes
+  included — and unplugging or replugging a USB DAC mid-track recovers
+  automatically. Your system-default device is never touched.
 
 **📚 A library you can drive**
+- A **Home page** to land on: Jump Back In, Keep Listening, Recently Added,
+  Most Played, and a Random shelf with a re-roll button.
 - Dense, sortable track table: double-click or ⏎ to play, ⌥-double-click to
   queue next, multi-select, drag to playlists.
 - Column browser (Genre → Artist → Album), global search (⌘F), quality
   badges ("FLAC", "320 kbps") with lossless-first sorting.
 - Server playlists round-trip fully: create, rename, reorder, delete.
 - Favorites everywhere, with a ★ column.
+- **Scrobbling** (on by default) feeds your server's play counts and
+  Last.fm-style history; kick off a **server library scan** right from the
+  app (File → Update Server Library).
 
 **🖥 A proper Mac citizen**
-- iTunes-style "LCD" in the toolbar; Now Playing panel with a reorderable
-  Up Next queue; a menu-bar player that works with the window closed.
+- iTunes-style "LCD" in the toolbar; a resizable Now Playing panel with a
+  reorderable Up Next queue; a menu-bar player that works with the window
+  closed. Click the panel's artwork to Quick Look the cover at full
+  resolution.
 - Media keys, Control Center / Now Playing widget, live artwork.
 - Light/Dark, full keyboard shortcuts, VoiceOver support, state restoration,
   sandboxed with a single entitlement (outgoing network).
@@ -68,8 +81,8 @@ Credentials go straight to the Keychain; your password never travels in a URL.
 
 ## Status
 
-v0.1.0 is out — feature-complete, with Mac App Store distribution in
-progress. Deliberately out of scope for v1: offline downloads, scrobbling,
+v0.1.2 is out — feature-complete, with Mac App Store distribution in
+progress. Deliberately out of scope for v1: offline downloads,
 smart playlists, multi-server profiles, tag editing.
 
 ## For developers
@@ -86,10 +99,13 @@ xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
 The [`docs/`](docs/) directory holds the full design docs — architecture,
 the playback-engine deep-dive (gapless + crackle forensics), API layer,
 UI/UX rationale — and the running build log
-([`docs/PROGRESS.md`](docs/PROGRESS.md)). The test suite runs hermetically;
-an opt-in live suite exercises a real server via `SONICWAVE_HOST/USER/PASS`
+([`docs/PROGRESS.md`](docs/PROGRESS.md)). The test suite runs hermetically —
+in CI on every push ([`tests.yml`](.github/workflows/tests.yml)) — and an
+opt-in live suite exercises a real server via `SONICWAVE_HOST/USER/PASS`
 env vars. Releases ship through [`scripts/release.sh`](scripts/release.sh)
-(archive → notarize → staple) and [`scripts/publish.sh`](scripts/publish.sh).
+(archive → notarize → staple) and [`scripts/publish.sh`](scripts/publish.sh);
+the [website](https://thijsw.github.io/sonicwave/) redeploys itself from
+[`site/`](site/) on every release.
 
 ## License
 

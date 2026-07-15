@@ -12,8 +12,11 @@ playback first (M3).
 > scroll, accessibility semantics AX-verified, Light/Dark verified; the `08`
 > checklist passes — only the Liquid Glass look on macOS 26 awaits a Tahoe
 > machine, plus by-hand VoiceOver/contrast spot checks) · M8 🚧 — Developer ID pipeline complete (notarized, stapled,
-> Gatekeeper-accepted); MAS portal artifacts, icon, App Privacy, CI remain.
-> See `PROGRESS.md` for the detailed build log.
+> Gatekeeper-accepted) and CI runs the unit suite on every push; MAS portal
+> artifacts, icon, App Privacy remain. Post-M7 feature batch shipped: Home
+> page, scrobbling, demo-server onboarding, library scan, Quick Look artwork,
+> Show Album, decode-failure alerts, resizable Now Playing panel, AirPlay
+> Tier 1. See `PROGRESS.md` for the detailed build log.
 
 ## M0 — Foundation ✅
 - Create the Xcode app project (macOS 15 deployment, Swift 6 language mode,
@@ -91,7 +94,8 @@ playback first (M3).
 ## M8 — Distribution 🚧
 - App icon, App Privacy details, reviewer notes/demo credentials — `07`.
 - MAS signing/notarization pipeline; (optional) Developer ID build.
-- Full unit + UI test pass on macOS 15 / Xcode 26 CI — `08`.
+- ✅ CI: build + full unit suite on every push/PR
+  (`.github/workflows/tests.yml`, macOS 15 runner) — `08`.
 - **Exit:** signed MAS build uploads to App Store Connect; tests green.
 
 ## AirPlay
@@ -116,5 +120,6 @@ playback first (M3).
 | App Review needs a working server | M8 | Demo credentials + graceful no-server onboarding |
 
 ## Out of scope (post-v1)
-Offline caching/downloads, scrobbling, smart playlists, multi-server,
-Cover Flow, local-file playback, tag editing — see `00`.
+Offline caching/downloads, direct Last.fm/ListenBrainz clients (server
+scrobbling shipped), smart playlists, multi-server, Cover Flow,
+local-file playback, tag editing — see `00`.

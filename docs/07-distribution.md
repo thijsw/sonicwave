@@ -64,8 +64,14 @@ needed (playback, Keychain, networking all work in the exported app).
   `MARKETING_VERSION` + build number, commits, runs the notarized
   Developer ID build, refuses to ship anything Gatekeeper rejects, tags
   `v<version>`, pushes, and creates the GitHub Release with the zip attached
-  (`gh release create … --generate-notes`). Downloads are public only once
-  the repository is public.
+  (`gh release create … --generate-notes`). The repository went public
+  2026-07-15, so release downloads are public.
+- **Website:** `site/` holds the landing page, deployed to GitHub Pages by
+  `.github/workflows/pages.yml` (https://thijsw.github.io/sonicwave/). It
+  redeploys on every push touching `site/` **and on every published
+  release**, stamping the latest release tag into the page's
+  `app-version` spans — the public download front door stays current with
+  zero manual steps.
 
 ## Review considerations 🔶
 

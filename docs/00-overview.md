@@ -37,7 +37,9 @@ client rather than a web UI or an Electron app.
   window; credentials in Keychain.
 - Standard Subsonic **token+salt** auth and OpenSubsonic **API-key** auth
   where the server supports it.
-- Library browsing: **Albums, Artists, Songs, Genres, Favorites (starred)**.
+- Library browsing: **Albums, Artists, Songs, Genres, Favorites (starred)**,
+  plus a **Home** landing page (Jump Back In, Keep Listening, Recently Added,
+  Most Played, Random shelves).
 - The user's **server playlists** with full create / edit / delete / reorder.
 - **Streaming-only** playback with **gapless** album transitions.
 - Optional **server-side transcoding** (format + bitrate) setting; otherwise
@@ -47,14 +49,19 @@ client rather than a web UI or an Electron app.
 - A **`MenuBarExtra`** Now Playing panel (window style).
 - **Global search**, dense sortable **track table**, **column browser**,
   **Up Next** queue, persistent **now-playing header**.
-- Output device selection.
+- Output device selection (AirPlay routes included).
+- **Server scrobbling** ("now playing" + play submissions, Last.fm rules) and
+  a **server library scan** trigger.
+- **Quick Look** full-resolution artwork and **Show Album in Library**.
 - Full macOS citizenship: menu bar + standard shortcuts, multi-window,
   full-screen, Stage Manager, state restoration, Light/Dark, accessibility.
 
 ## Non-goals (explicitly out of scope for v1)
 
 - ❌ Offline caching / downloads (streaming only). ⏳
-- ❌ Scrobbling (Last.fm / ListenBrainz). ⏳
+- ❌ Direct Last.fm / ListenBrainz clients. (Server scrobbling **shipped**
+  2026-07-11 — the server relays to any connected scrobbler; a direct
+  client remains out of scope.)
 - ❌ Smart playlists.
 - ❌ Multiple server profiles / multi-server.
 - ❌ Cover Flow.
@@ -97,7 +104,7 @@ acceptance checklist.
 | Playback | Streaming-only | 02, 03 |
 | Playback | Gapless (pre-buffer next track) | 03 |
 | Playback | Now Playing / media keys / remote commands / artwork | 06 |
-| Playback | No scrobbling | 00 (non-goal) |
+| Playback | Server scrobbling (shipped post-M7; direct Last.fm client stays a non-goal) | 00, 02 |
 | Interface & UX | iTunes 12.6.3 interaction model, modern native styling, HIG, SF Symbols | 00, 04 |
 | Interface & UX | Sidebar groups (Library / Playlists) | 04 |
 | Interface & UX | MenuBarExtra Now Playing panel | 04 |

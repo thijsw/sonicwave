@@ -136,7 +136,9 @@ selectable lists; selections are part of restorable view state. Toggleable
   title/artist/album, a slim scrubber with elapsed/total times, and a
   prominent transport cluster (accent-filled play) flanked by shuffle + repeat
   toggles (accent when active) — all on a 16pt inset shared with the Up Next
-  rows.
+  rows. Clicking the hero artwork **Quick Looks** the full-resolution cover
+  (staged via `ArtworkCache.originalImageFileURL`, see `05`); the album line
+  doubles as a **Show Album in Library** button (⇧⌘L, also in Controls).
 - Below, the **Up Next** queue: **reorderable** by drag (`.onMove`),
   hover-to-remove, "play from here" via a hover play button on the artwork
   (and the context menu), clear upcoming. Edits mutate `PlayerModel.queue`;
@@ -192,11 +194,13 @@ selectable lists; selections are part of restorable view state. Toggleable
 Menu bar via `Commands` (`SonicwaveCommands`):
 
 - **File:** New Playlist… (⌘N, replaces New Window — like Music), routed to
-  the sidebar's New Playlist prompt via `AppModel.requestNewPlaylist()`.
+  the sidebar's New Playlist prompt via `AppModel.requestNewPlaylist()`;
+  Update Server Library (triggers a server-side `startScan`).
 - **Controls:** Play/Pause (Space), Next (⌘→), Previous (⌘←),
   Increase/Decrease Volume (⌘↑/⌘↓), Add/Remove Favorites for the current
-  track (⌘L, title reflects its starred state), Repeat (Off/All/One picker),
-  Shuffle toggle — playback items disabled when nothing is loaded.
+  track (⌘L, title reflects its starred state), Show Album in Library (⇧⌘L),
+  Repeat (Off/All/One picker), Shuffle toggle — playback items disabled when
+  nothing is loaded.
 - **View:** Show Now Playing (⌘U, disabled when nothing plays/queued), Show
   Column Browser (⌥⌘B), plus the standard sidebar toggle.
 - **Find:** ⌘F focuses the sidebar search field (a hidden button —

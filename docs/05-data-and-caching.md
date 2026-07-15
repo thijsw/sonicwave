@@ -29,6 +29,13 @@ size`:
   without scoping the cache would serve the wrong image. Set via
   `setServer(baseURL:)` at launch, on connect, and on disconnect; switching
   servers drops the in-memory tier and each server keeps its own disk store.
+- **Quick Look originals.** Clicking the Now Playing panel's hero art opens
+  the full-resolution cover: `stageOriginal` fetches the original bytes
+  (cached as the "size 0" variant), then writes a human-named copy into a
+  per-server `previews/` subdirectory — extension sniffed from the image's
+  magic bytes — so Quick Look's title shows the album name rather than a
+  hash. (`previews/` filenames are the one exception to the SHA-256 naming
+  above.) Consumed by `NowPlayingPanel` via `.quickLookPreview`.
 
 ## Persistence: SwiftData 🔶 (dropped — historical)
 

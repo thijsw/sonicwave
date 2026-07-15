@@ -58,7 +58,7 @@ audio hardware.
   server only when `SONICWAVE_HOST`/`SONICWAVE_USER`/`SONICWAVE_PASS` are set;
   skipped otherwise, so no credentials are committed and CI stays hermetic.
 
-## Current suite (Swift Testing, 66 tests)
+## Current suite (Swift Testing, 67 tests)
 
 `AuthTests` · `RequestBuildingTests` · `DecodingTests` · `ConnectionTests` ·
 `PlaylistEndpointTests` · `PlaybackConfigTests` · `PlayerQueueTests` ·
@@ -103,8 +103,13 @@ These can't be fully automated — verify by hand each release. Status as of
 - [x] Memory stable over a long listening session — leak audit 2026-07-07:
       zero app-code leaks; footprint declines during playback.
 
-## CI 🔶
+## CI 🔶 (unit job ✅)
 
-- Run unit tests on every change (`xcodebuild test` /
-  `swift test` where applicable) on a macOS 15 + Xcode 26 runner.
-- Build the signed MAS artifact in a release job (see `07`).
+- ✅ Unit tests run on every push to `main` and every PR:
+  `.github/workflows/tests.yml` (macOS 15 runner, newest installed Xcode
+  selected at runtime, `CODE_SIGNING_ALLOWED=NO`; `LiveDecodeTests`
+  self-skip without env credentials).
+- ⏳ Build the signed MAS artifact in a release job (see `07`) —
+  `scripts/release.sh`/`publish.sh` remain local.
+- (Adjacent: `.github/workflows/pages.yml` deploys the website on release —
+  see `07`.)

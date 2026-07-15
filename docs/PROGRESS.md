@@ -37,8 +37,8 @@ AX-verified, Light/Dark verified — the `08` checklist passes; only the
 Liquid Glass look awaits a macOS 26 machine, plus by-hand VoiceOver/contrast
 spot checks) ·
 M8 🚧 (Developer ID pipeline complete incl. notarization + stapling —
-Gatekeeper-accepted distributable build; remaining: MAS certificates/app
-record, final icon, App Privacy, reviewer notes, CI)
+Gatekeeper-accepted distributable build; CI runs the unit suite on every
+push; remaining: MAS certificates/app record, final icon, App Privacy)
 
 ## How to build / test
 ```sh
@@ -661,8 +661,9 @@ Status: **UI + data flow working in-memory; SwiftData cache not yet wired.**
   eliminated 2026-07-07 — always-true casts collapsed via typed throws,
   `MusicTrackTable.Coordinator` made `@MainActor`, converter input flags
   boxed, date decoding moved to Sendable `Date.ISO8601FormatStyle`).
-- ✅ `xcodebuild test` — full suite green (**TEST SUCCEEDED**, 66 tests,
-  0 failures).
+- ✅ `xcodebuild test` — full suite green (**TEST SUCCEEDED**, 67 tests,
+  0 failures), and CI repeats the run on every push
+  (`.github/workflows/tests.yml`).
 
 ### Live verification — 2026-06-22, against Navidrome 0.62.0 (real server)
 Validated the networking + decode path end-to-end (opt-in `LiveDecodeTests`,
