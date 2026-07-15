@@ -50,6 +50,30 @@ xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
 
 ---
 
+## v0.2.0 released; repo public, website live (2026-07-15)
+- **Released v0.2.0 (build 5)** via `scripts/publish.sh` — notarized,
+  Gatekeeper-accepted ("Notarized Developer ID"), tagged, zip attached to
+  the GitHub Release with generated notes. First release carrying the
+  post-M7 feature batch (Home, scrobbling, AirPlay Tier 1, demo onboarding,
+  scan, Quick Look art, decode-failure alerts, resizable panel).
+- **Repository made public** (2026-07-15) after a full git-history audit:
+  no credentials/hosts ever committed (live tests are env-var-gated); the
+  Apple Team ID and author email are the only identifying values and are
+  public by design. Claude-design share links stripped from `09`.
+- **Landing page** (`site/`, dark hi-fi look, animated LCD hero) deployed to
+  GitHub Pages: <https://thijsw.github.io/sonicwave/>. `pages.yml` deploys
+  on `site/` pushes **and on every published release**, stamping the latest
+  release tag into the page's `app-version` spans — the download front door
+  stays current with zero manual steps.
+- Gotcha found on the first release-triggered deploy: the `github-pages`
+  environment only allowed `main`, and release events run on the **tag
+  ref** — the run failed in 3s with no job logs. Fixed permanently with a
+  `v*` **tag** deployment-branch policy on the environment; rerun deployed
+  and the live page shows 0.2.0.
+- Docs synced with the shipped app (scrobbling no longer a non-goal — the
+  server relays; CI marked done; AirPlay/Quick Look/scan coverage added)
+  and a root `CLAUDE.md` added as the session entry point.
+
 ## Polish batch: scan, Quick Look art, show-album (2026-07-08)
 Player quality-of-life features, all live-verified:
 - **Server library scan**: `startScan` endpoint; Settings → Connection
