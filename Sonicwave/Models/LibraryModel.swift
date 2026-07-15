@@ -137,6 +137,14 @@ final class LibraryModel {
         }
     }
 
+    /// A fresh random batch for whole-library shuffle (Shuffle All). Distinct
+    /// from the Songs sample above so the visible list isn't disturbed.
+    /// Best-effort: an empty result simply leaves playback untouched.
+    func randomBatch(size: Int = 500) async -> [Song] {
+        let body = try? await client.send(.randomSongs(size: size), as: RandomSongsBody.self)
+        return body?.randomSongs.song ?? []
+    }
+
     // MARK: - Genres
 
     func loadGenresIfNeeded() async {

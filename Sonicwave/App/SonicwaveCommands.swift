@@ -94,6 +94,9 @@ struct SonicwaveCommands: Commands {
                 get: { app.player.shuffle },
                 set: { app.player.shuffle = $0 }
             ))
+
+            Button("Shuffle Library") { app.shuffleLibrary() }
+                .disabled(!app.connection.isConnected)
         }
     }
 

@@ -33,6 +33,18 @@ final class AppModel {
         showCurrentAlbumRequests += 1
     }
 
+    /// Controls → Shuffle Library and the Songs header: play a big random
+    /// sample of the whole library. Subsonic has no all-songs endpoint, so
+    /// 500 random songs (~a full day of music) stands in — the server already
+    /// randomizes, so the batch plays as returned.
+    func shuffleLibrary() {
+        Task {
+            let batch = await library.randomBatch()
+            guard !batch.isEmpty else { return }
+            player.play(tracks: batch)
+        }
+    }
+
     // Services (not observed directly by views).
     let credentials: CredentialStore
     let client: SubsonicClient
