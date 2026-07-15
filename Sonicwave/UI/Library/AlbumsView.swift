@@ -12,7 +12,11 @@ struct AlbumsView: View {
             // replaced by the custom now-playing bar.
             HStack {
                 Spacer()
+                filterMenu
                 sortMenu
+                    // Genre/year are list *types* server-side, so an active
+                    // filter owns the ordering.
+                    .disabled(library.albumFilter != .none)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 8)
@@ -41,7 +45,51 @@ struct AlbumsView: View {
             }
         }
         .navigationTitle("Albums")
-        .task { await library.loadAlbumsIfNeeded() }
+        .task {
+            await library.loadAlbumsIfNeeded()
+            await library.loadGenresIfNeeded()   // feeds the filter menu
+        }
+    }
+
+    private var filterMenu: some View {
+        Menu {
+            Button("All Albums") {
+                Task { await library.changeAlbumFilter(to: .none) }
+            }
+            Picker("Genre", selection: filterBinding) {
+                ForEach(library.genres) { genre in
+                    Text(genre.value).tag(LibraryModel.AlbumFilter.genre(genre.value))
+                }
+            }
+            .pickerStyle(.menu)
+            Picker("Decade", selection: filterBinding) {
+                ForEach(Array(stride(from: 2020, through: 1950, by: -10)), id: \.self) { decade in
+                    Text(verbatim: "\(decade)s")
+                        .tag(LibraryModel.AlbumFilter.years(from: decade, through: decade + 9))
+                }
+            }
+            .pickerStyle(.menu)
+        } label: {
+            Label(filterLabel, systemImage: "line.3.horizontal.decrease.circle")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Filter Albums")
+    }
+
+    private var filterBinding: Binding<LibraryModel.AlbumFilter> {
+        Binding(
+            get: { library.albumFilter },
+            set: { filter in Task { await library.changeAlbumFilter(to: filter) } }
+        )
+    }
+
+    private var filterLabel: String {
+        switch library.albumFilter {
+        case .none: return "Filter"
+        case let .genre(name): return name
+        case let .years(from, _): return "\(from)s"
+        }
     }
 
     private var sortMenu: some View {

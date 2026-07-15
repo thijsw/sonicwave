@@ -21,6 +21,15 @@ final class LibraryModel {
     private var albumOffset = 0
     private var albumsExhausted = false
     var albumSortType = "alphabeticalByName"
+    private(set) var albumFilter: AlbumFilter = .none
+
+    /// Albums-grid filter. Genre and year are `getAlbumList2` list types, so
+    /// an active filter replaces the sort order server-side (issue #9).
+    enum AlbumFilter: Hashable {
+        case none
+        case genre(String)
+        case years(from: Int, through: Int)
+    }
 
     private(set) var artists: [Artist] = []
     private(set) var artistsState: Load<Void> = .idle
@@ -40,11 +49,14 @@ final class LibraryModel {
     private(set) var homeRandom: [Album] = []
     private(set) var homeLoaded = false
 
-    private(set) var playlists: [Playlist] = []
+    // Internal setter (not private): playlist CRUD lives in
+    // LibraryModel+Playlists.swift.
+    var playlists: [Playlist] = []
 
     static let pageSize = 100
 
-    private let client: SubsonicClient
+    // Internal (not private): LibraryModel+Playlists.swift sends through it.
+    let client: SubsonicClient
 
     init(client: SubsonicClient) {
         self.client = client
@@ -54,6 +66,7 @@ final class LibraryModel {
         albums = []
         albumOffset = 0
         albumsExhausted = false
+        albumFilter = .none
         albumsState = .idle
         artists = []
         artistsState = .idle
@@ -82,10 +95,7 @@ final class LibraryModel {
         if case .loading = albumsState { return }
         albumsState = .loading
         do {
-            let body = try await client.send(
-                .albumList2(type: albumSortType, size: Self.pageSize, offset: albumOffset),
-                as: AlbumList2Body.self
-            )
+            let body = try await client.send(albumPageEndpoint(), as: AlbumList2Body.self)
             let page = body.albumList2.album ?? []
             albums.append(contentsOf: page)
             albumOffset += page.count
@@ -97,10 +107,35 @@ final class LibraryModel {
         }
     }
 
+    /// The next page for the current sort/filter combination. Filters are
+    /// list *types* in the API, so an active filter takes over from the sort.
+    private func albumPageEndpoint() -> Endpoint {
+        switch albumFilter {
+        case .none:
+            return .albumList2(type: albumSortType, size: Self.pageSize, offset: albumOffset)
+        case let .genre(name):
+            return .albumList2(type: "byGenre", size: Self.pageSize, offset: albumOffset,
+                               genre: name)
+        case let .years(from, through):
+            return .albumList2(type: "byYear", size: Self.pageSize, offset: albumOffset,
+                               fromYear: from, toYear: through)
+        }
+    }
+
     private static let log = Logger(subsystem: "nl.huell.sonicwave", category: "library")
 
     func changeAlbumSort(to type: String) async {
         albumSortType = type
+        await reloadAlbums()
+    }
+
+    func changeAlbumFilter(to filter: AlbumFilter) async {
+        guard filter != albumFilter else { return }
+        albumFilter = filter
+        await reloadAlbums()
+    }
+
+    private func reloadAlbums() async {
         albums = []
         albumOffset = 0
         albumsExhausted = false
@@ -173,74 +208,6 @@ final class LibraryModel {
         } catch {
             // leave existing values; surfaced via UI empty state
         }
-    }
-
-    // MARK: - Playlists
-
-    func loadPlaylistsIfNeeded() async {
-        guard playlists.isEmpty else { return }
-        await reloadPlaylists()
-    }
-
-    func reloadPlaylists() async {
-        do {
-            let body = try await client.send(.playlists, as: PlaylistsBody.self)
-            playlists = (body.playlists.playlist ?? [])
-                .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-        } catch {
-            // keep existing
-        }
-    }
-
-    func playlist(id: String) async -> Playlist? {
-        do {
-            let body = try await client.send(.playlist(id: id), as: PlaylistBody.self)
-            return body.playlist
-        } catch {
-            return nil
-        }
-    }
-
-    // MARK: - Playlist editing (M5)
-
-    /// Create a playlist, optionally seeded with songs. Returns the created
-    /// playlist (when the server echoes it) so callers can select it.
-    @discardableResult
-    func createPlaylist(name: String, songIds: [String] = []) async -> Playlist? {
-        let created = try? await client.send(.createPlaylist(name: name, songIds: songIds),
-                                             as: PlaylistBody.self)
-        await reloadPlaylists()
-        return created?.playlist
-    }
-
-    func deletePlaylist(id: String) async {
-        _ = try? await client.sendStatus(.deletePlaylist(id: id))
-        await reloadPlaylists()
-    }
-
-    func renamePlaylist(id: String, to name: String) async {
-        _ = try? await client.sendStatus(.updatePlaylist(id: id, name: name))
-        await reloadPlaylists()
-    }
-
-    func addToPlaylist(id: String, songIds: [String]) async {
-        guard !songIds.isEmpty else { return }
-        _ = try? await client.sendStatus(.updatePlaylist(id: id, songIdsToAdd: songIds))
-        await reloadPlaylists()
-    }
-
-    func removeFromPlaylist(id: String, indexes: [Int]) async {
-        guard !indexes.isEmpty else { return }
-        _ = try? await client.sendStatus(.updatePlaylist(id: id, songIndexesToRemove: indexes))
-        await reloadPlaylists()
-    }
-
-    /// Reorder by replacing the playlist's contents with `songIds` in the new
-    /// order — `updatePlaylist` can only append, so the full-replace form of
-    /// `createPlaylist` is the canonical reorder mechanism.
-    func reorderPlaylist(id: String, name: String, songIds: [String]) async {
-        _ = try? await client.sendStatus(.createPlaylist(name: name, playlistId: id, songIds: songIds))
-        await reloadPlaylists()
     }
 
     // MARK: - Search

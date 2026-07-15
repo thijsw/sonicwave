@@ -54,3 +54,30 @@ struct PlaylistEndpointTests {
         #expect(Endpoint.unstar(id: "s1").method == "unstar")
     }
 }
+
+/// Album filter endpoints (issue #9): genre and year are list types.
+struct AlbumFilterEndpointTests {
+    private func items(_ endpoint: Endpoint) -> [String: String?] {
+        Dictionary(uniqueKeysWithValues: endpoint.queryItems.map { ($0.name, $0.value) })
+    }
+
+    @Test func byGenreCarriesGenreParam() {
+        let endpoint = Endpoint.albumList2(type: "byGenre", size: 100, offset: 40, genre: "Jazz")
+        #expect(items(endpoint)["type"] == "byGenre")
+        #expect(items(endpoint)["genre"] == "Jazz")
+        #expect(items(endpoint)["offset"] == "40")
+    }
+
+    @Test func byYearCarriesRange() {
+        let endpoint = Endpoint.albumList2(type: "byYear", size: 100, offset: 0,
+                                           fromYear: 1990, toYear: 1999)
+        #expect(items(endpoint)["fromYear"] == "1990")
+        #expect(items(endpoint)["toYear"] == "1999")
+    }
+
+    @Test func plainSortOmitsFilterParams() {
+        let endpoint = Endpoint.albumList2(type: "newest", size: 100, offset: 0)
+        #expect(items(endpoint)["genre"] == nil)
+        #expect(items(endpoint)["fromYear"] == nil)
+    }
+}

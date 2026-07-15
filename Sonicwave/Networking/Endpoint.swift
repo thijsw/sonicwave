@@ -29,12 +29,20 @@ struct Endpoint: Sendable {
     static let startScan = Endpoint("startScan")
 
     // MARK: Library
-    static func albumList2(type: String, size: Int, offset: Int) -> Endpoint {
-        Endpoint("getAlbumList2", [
+    /// `genre` requires `type == "byGenre"`; `fromYear`/`toYear` require
+    /// `type == "byYear"` (filters are list types in the Subsonic API).
+    static func albumList2(type: String, size: Int, offset: Int,
+                           genre: String? = nil,
+                           fromYear: Int? = nil, toYear: Int? = nil) -> Endpoint {
+        var items: [URLQueryItem] = [
             .init(name: "type", value: type),
             .init(name: "size", value: String(size)),
             .init(name: "offset", value: String(offset))
-        ])
+        ]
+        if let genre { items.append(.init(name: "genre", value: genre)) }
+        if let fromYear { items.append(.init(name: "fromYear", value: String(fromYear))) }
+        if let toYear { items.append(.init(name: "toYear", value: String(toYear))) }
+        return Endpoint("getAlbumList2", items)
     }
 
     static let artists = Endpoint("getArtists")
