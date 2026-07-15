@@ -217,6 +217,9 @@ extension PlaybackService {
         let span = TrackSpan(id: request.songId, index: request.index, duration: request.duration,
                              seekBase: request.seekBase, gain: request.gain,
                              startFrame: cumulativeFrames, frameCount: 0, decodeComplete: false)
+        if request.gain != 1 {
+            Self.log.info("replaygain \(request.gain, privacy: .public) for \(request.songId, privacy: .public)")
+        }
         spans.append(span)
         let spanArrayIndex = spans.count - 1
 

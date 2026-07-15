@@ -72,8 +72,19 @@ First four tracker issues closed (from the competitive research round):
   Playback picker; seek preserves the span's gain. Gotcha: `Song` has
   explicit `CodingKeys` — new decoded fields must be added there or they
   silently decode as nil.
-- Suite: 67 → **89 tests**. ⏳ Live pass still owed: queue restore + RG
-  audibility against a real Navidrome (unit-level only so far).
+- Suite: 67 → **89 tests**.
+- **Live-verified vs Navidrome 0.63.2** (same day): queue restore across
+  quit/relaunch is exact — track, paused position (1:02, then 3:01) and Up
+  Next order all reappear, no auto-play; resume plays on from the restored
+  position at 1× (timestamp-correlated — beware: computer-driven UI clicks/
+  screenshots cost 5–18s each, which first masqueraded as a "+12s position
+  jump"). savePlayQueue→getPlayQueue round-trips through the formPost path
+  (Navidrome advertises it). Settings picker persists across relaunches.
+  A `replaygain <gain> for <songId>` info log (nl.huell.sonicwave/playback)
+  makes gain application observable; the library's files carry no RG tags,
+  so non-unity gain (and audibility) still needs a tagged album — the
+  unity no-op path ran clean. NB: zsh shadows `/usr/bin/log` with a
+  builtin — use the full path.
 
 ## v0.2.0 released; repo public, website live (2026-07-15)
 - **Released v0.2.0 (build 5)** via `scripts/publish.sh` — notarized,
