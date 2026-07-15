@@ -20,6 +20,9 @@ struct TrackTableView: View {
     var scrollAutosaveKey: String?
     var onRemoveFromPlaylist: ((IndexSet) -> Void)?
     var onMovePlaylist: ((IndexSet, Int) -> Void)?
+    /// Disc → subtitle; non-nil opts into disc group headers on multi-disc
+    /// content (the album page passes this).
+    var discHeaders: [Int: String]?
 
     @Environment(LibraryModel.self) private var library
     @Environment(PlayerModel.self) private var player
@@ -43,6 +46,7 @@ struct TrackTableView: View {
             sortAutosaveKey: isPlaylist ? nil : sortAutosaveKey,
             scrollAutosaveKey: isPlaylist ? nil : scrollAutosaveKey,
             columns: columns,
+            discHeaders: discHeaders,
             nowPlayingID: player.currentTrack?.id,
             selection: $selection,
             isFavorite: { isStarred($0) },

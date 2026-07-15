@@ -9,6 +9,7 @@ struct AlbumDetailView: View {
     @Environment(LibraryModel.self) private var library
     @Environment(Navigator.self) private var navigator
     @State private var tracks: [Song] = []
+    @State private var discSubtitles: [Int: String] = [:]
     @State private var starredOverride: Bool?
 
     // Derive from the library's starred set (source of truth) so the state
@@ -22,10 +23,15 @@ struct AlbumDetailView: View {
             header
             Divider()
             TrackTableView(tracks: tracks, columns: [.number, .title, .artist, .genre, .quality, .time],
-                           sortAutosaveKey: "album")
+                           sortAutosaveKey: "album",
+                           discHeaders: discSubtitles)
         }
         .task(id: album.id) {
-            tracks = await library.songs(forAlbum: album.id)
+            // One getAlbum fetch supplies both the tracks and the disc
+            // subtitles (multi-disc headers).
+            let detail = await library.album(id: album.id)
+            tracks = detail?.song ?? []
+            discSubtitles = detail?.discSubtitles ?? [:]
             await library.loadStarredIfNeeded()
         }
     }

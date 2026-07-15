@@ -82,9 +82,26 @@ struct Album: Identifiable, Codable, Sendable, Hashable {
     var genres: [GenreRef]?
     var starred: Date?
     var song: [Song]?
+    /// OpenSubsonic disc subtitles (TSST), present on getAlbum responses when
+    /// the files are tagged. Feeds the disc headers on the album page.
+    var discTitles: [DiscTitle]?
 
     var isStarred: Bool { starred != nil }
     var displayGenre: String? { genre ?? genres?.first?.name }
+
+    /// Disc number → subtitle, for quick header lookup.
+    var discSubtitles: [Int: String] {
+        Dictionary(uniqueKeysWithValues: (discTitles ?? [])
+            .compactMap { entry in
+                guard let disc = entry.disc, let title = entry.title, !title.isEmpty else { return nil }
+                return (disc, title)
+            })
+    }
+}
+
+struct DiscTitle: Codable, Sendable, Hashable {
+    var disc: Int?
+    var title: String?
 }
 
 struct Artist: Identifiable, Codable, Sendable, Hashable {

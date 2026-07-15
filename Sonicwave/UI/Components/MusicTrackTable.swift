@@ -6,11 +6,14 @@ import UniformTypeIdentifiers
 private final class InnerTableView: NSTableView {
     var contextMenuProvider: ((IndexSet) -> NSMenu?)?
     var onReturn: (() -> Void)?
+    /// Disc headers are not selectable; programmatic selection must skip them
+    /// (`selectRowIndexes` bypasses the shouldSelect delegate).
+    var selectableRow: ((Int) -> Bool)?
 
     override func menu(for event: NSEvent) -> NSMenu? {
         let point = convert(event.locationInWindow, from: nil)
         let row = self.row(at: point)
-        guard row >= 0 else { return nil }
+        guard row >= 0, selectableRow?(row) != false else { return nil }
         if !selectedRowIndexes.contains(row) {
             selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
         }
@@ -23,6 +26,33 @@ private final class InnerTableView: NSTableView {
         } else {
             super.keyDown(with: event)
         }
+    }
+}
+
+/// Table rows: tracks interleaved with unselectable disc group headers.
+/// All external index semantics (selection binding, onPlay, drag) stay in
+/// *displayed*-track space; the coordinator's delegate methods translate.
+enum TrackTableRow: Equatable {
+    case header(String)
+    case track(Int)   // index into the displayed track order
+
+    static func build(tracks: [Song], headers: [Int: String]?) -> [TrackTableRow] {
+        let plain = tracks.indices.map(TrackTableRow.track)
+        guard let headers else { return plain }
+        let discs = Set(tracks.map { $0.discNumber ?? 1 })
+        guard discs.count > 1 else { return plain }
+        var rows: [TrackTableRow] = []
+        var current: Int?
+        for (index, track) in tracks.enumerated() {
+            let disc = track.discNumber ?? 1
+            if disc != current {
+                current = disc
+                let title = headers[disc].map { "Disc \(disc) · \($0)" } ?? "Disc \(disc)"
+                rows.append(.header(title))
+            }
+            rows.append(.track(index))
+        }
+        return rows
     }
 }
 
@@ -44,6 +74,16 @@ struct MusicTrackTable: NSViewRepresentable {
     var scrollAutosaveKey: String?
     /// Content columns to show, in order. Caller decides explicitly.
     var columns: [TrackColumn]
+    /// Disc → subtitle; non-nil opts into disc group headers on multi-disc
+    /// content (album page). Headers appear only in disc order — the natural
+    /// order or an ascending # sort — since other sorts interleave discs.
+    var discHeaders: [Int: String]?
+    /// Order-stable rendering of `discHeaders` for the reload signature.
+    var discHeadersSignature: String? {
+        discHeaders.map { headers in
+            headers.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: "|")
+        }
+    }
     var nowPlayingID: String?
     @Binding var selection: Set<Int>          // indices into the *displayed* order
     var isFavorite: (Song) -> Bool
@@ -74,11 +114,14 @@ struct MusicTrackTable: NSViewRepresentable {
         var scrollRestored = false
         var pendingScrollSave: DispatchWorkItem?
 
+        private(set) var rows: [TrackTableRow] = []
+
         init(_ parent: MusicTrackTable) { self.parent = parent }
 
         /// Recompute the displayed (optionally sorted) order and reload.
         func rebuild() {
             displayed = sortedTracks()
+            rows = TrackTableRow.build(tracks: displayed, headers: activeDiscHeaders)
             table?.reloadData()
         }
 
@@ -86,10 +129,36 @@ struct MusicTrackTable: NSViewRepresentable {
             var sig = parent.tracks.map(\.id)
             sig.append("sort:\(sortKey ?? "")\(ascending)")
             sig.append("np:\(parent.nowPlayingID ?? "")")
+            sig.append("discs:" + (parent.discHeadersSignature ?? "off"))
             sig.append(contentsOf: parent.tracks.map { parent.isFavorite($0) ? "1" : "0" })
             guard sig != signature else { return }
             signature = sig
             rebuild()
+        }
+
+        /// Headers require disc order: no user sort, or the disc-aware # sort
+        /// ascending. Any other sort interleaves discs — headers withdraw.
+        private var activeDiscHeaders: [Int: String]? {
+            guard let headers = parent.discHeaders else { return nil }
+            switch sortKey {
+            case nil: return headers
+            case "number": return ascending ? headers : nil
+            default: return nil
+            }
+        }
+
+        /// The displayed-track index at a table row (nil for a disc header).
+        func trackIndex(atRow row: Int) -> Int? {
+            guard rows.indices.contains(row), case let .track(index) = rows[row] else { return nil }
+            return index
+        }
+
+        func tableRows(forTrackIndices indices: Set<Int>) -> IndexSet {
+            IndexSet(indices.compactMap { rows.firstIndex(of: .track($0)) })
+        }
+
+        func menuForSelection(_ selectedRows: IndexSet) -> NSMenu? {
+            parent.makeMenu(displayed, IndexSet(selectedRows.compactMap { trackIndex(atRow: $0) }))
         }
 
         private func sortedTracks() -> [Song] {
@@ -115,10 +184,18 @@ struct MusicTrackTable: NSViewRepresentable {
             }
         }
 
-        func numberOfRows(in tableView: NSTableView) -> Int { displayed.count }
+        func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
 
         func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
-            TrackRowView()
+            trackIndex(atRow: row) == nil ? NSTableRowView() : TrackRowView()
+        }
+
+        func tableView(_ tableView: NSTableView, isGroupRow row: Int) -> Bool {
+            trackIndex(atRow: row) == nil
+        }
+
+        func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
+            trackIndex(atRow: row) != nil
         }
 
         func tableView(_ tableView: NSTableView, sortDescriptorsDidChange oldDescriptors: [NSSortDescriptor]) {
@@ -137,10 +214,10 @@ struct MusicTrackTable: NSViewRepresentable {
         }
 
         func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
-            guard displayed.indices.contains(row),
-                  let data = try? JSONEncoder().encode(DraggedTrack(songId: displayed[row].id,
-                                                                    index: row,
-                                                                    song: displayed[row]))
+            guard let index = trackIndex(atRow: row),
+                  let data = try? JSONEncoder().encode(DraggedTrack(songId: displayed[index].id,
+                                                                    index: index,
+                                                                    song: displayed[index]))
             else { return nil }
             let item = NSPasteboardItem()
             item.setData(data, forType: NSPasteboard.PasteboardType(UTType.json.identifier))
@@ -148,8 +225,13 @@ struct MusicTrackTable: NSViewRepresentable {
         }
 
         func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-            guard let id = tableColumn?.identifier.rawValue, displayed.indices.contains(row) else { return nil }
-            let song = displayed[row]
+            guard let index = trackIndex(atRow: row) else {
+                // Group rows get a single full-width view (tableColumn is nil).
+                if case let .header(title) = rows[row] { return discHeaderCell(title) }
+                return nil
+            }
+            guard let id = tableColumn?.identifier.rawValue else { return nil }
+            let song = displayed[index]
 
             switch id {
             case "indicator":
@@ -162,17 +244,34 @@ struct MusicTrackTable: NSViewRepresentable {
                 guard let label = song.qualityLabel else { return NSTableCellView() }
                 return QualityBadgeCell(text: label)
             case "fav":
-                return favoriteCell(for: song, row: row)
+                return favoriteCell(for: song, trackIndex: index)
             default:
                 return textCell(id: id, song: song)
             }
+        }
+
+        @MainActor private func discHeaderCell(_ title: String) -> NSTableCellView {
+            let label = NSTextField(labelWithString: title)
+            label.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
+            label.textColor = .secondaryLabelColor
+            label.lineBreakMode = .byTruncatingTail
+            label.translatesAutoresizingMaskIntoConstraints = false
+            let cell = NSTableCellView()
+            cell.textField = label
+            cell.addSubview(label)
+            NSLayoutConstraint.activate([
+                label.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8),
+                label.trailingAnchor.constraint(lessThanOrEqualTo: cell.trailingAnchor, constant: -8),
+                label.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
+            ])
+            return cell
         }
 
         @MainActor private func indicatorCell(for song: Song) -> NSTableCellView {
             song.id == parent.nowPlayingID ? NowPlayingIndicatorCell() : NSTableCellView()
         }
 
-        @MainActor private func favoriteCell(for song: Song, row: Int) -> NSTableCellView {
+        @MainActor private func favoriteCell(for song: Song, trackIndex: Int) -> NSTableCellView {
             let cell = NSTableCellView()
             let btn = NSButton()
             btn.isBordered = false
@@ -181,7 +280,7 @@ struct MusicTrackTable: NSViewRepresentable {
                                 accessibilityDescription: "Favorite")
             btn.setAccessibilityLabel(parent.isFavorite(song) ? "Remove from Favorites" : "Add to Favorites")
             btn.contentTintColor = parent.isFavorite(song) ? .systemYellow : .tertiaryLabelColor
-            btn.tag = row
+            btn.tag = trackIndex
             btn.target = self
             btn.action = #selector(favoriteClicked(_:))
             btn.translatesAutoresizingMaskIntoConstraints = false
@@ -230,16 +329,16 @@ struct MusicTrackTable: NSViewRepresentable {
 
         func tableViewSelectionDidChange(_ notification: Notification) {
             guard !updatingSelection, let table else { return }
-            parent.selection = Set(table.selectedRowIndexes)
+            parent.selection = Set(table.selectedRowIndexes.compactMap { trackIndex(atRow: $0) })
         }
 
         @objc func doubleClicked() {
-            guard let table, displayed.indices.contains(table.clickedRow) else { return }
+            guard let table, let index = trackIndex(atRow: table.clickedRow) else { return }
             // ⌥-double-click queues the track next instead of playing it.
             if NSApp.currentEvent?.modifierFlags.contains(.option) == true {
-                parent.onPlayNext(displayed[table.clickedRow])
+                parent.onPlayNext(displayed[index])
             } else {
-                parent.onPlay(displayed, table.clickedRow)
+                parent.onPlay(displayed, index)
             }
         }
 
@@ -249,7 +348,9 @@ struct MusicTrackTable: NSViewRepresentable {
         }
 
         func playSelected() {
-            if let row = table?.selectedRowIndexes.min() { parent.onPlay(displayed, row) }
+            guard let row = table?.selectedRowIndexes.min(),
+                  let index = trackIndex(atRow: row) else { return }
+            parent.onPlay(displayed, index)
         }
     }
 }
@@ -269,7 +370,8 @@ extension MusicTrackTable {
         table.dataSource = context.coordinator
         table.target = context.coordinator
         table.doubleAction = #selector(Coordinator.doubleClicked)
-        table.contextMenuProvider = { context.coordinator.parent.makeMenu(context.coordinator.displayed, $0) }
+        table.contextMenuProvider = { context.coordinator.menuForSelection($0) }
+        table.selectableRow = { context.coordinator.trackIndex(atRow: $0) != nil }
         table.onReturn = { context.coordinator.playSelected() }
         table.setDraggingSourceOperationMask([.copy], forLocal: true)
         addColumns(to: table)
@@ -329,11 +431,12 @@ extension MusicTrackTable {
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         context.coordinator.parent = self
         guard let table = scroll.documentView as? InnerTableView else { return }
-        table.contextMenuProvider = { context.coordinator.parent.makeMenu(context.coordinator.displayed, $0) }
+        table.contextMenuProvider = { context.coordinator.menuForSelection($0) }
         context.coordinator.reloadIfNeeded()
         context.coordinator.restoreScrollIfReady(scroll)
 
-        let want = IndexSet(selection.filter { context.coordinator.displayed.indices.contains($0) })
+        let want = context.coordinator.tableRows(
+            forTrackIndices: selection.filter { context.coordinator.displayed.indices.contains($0) })
         if table.selectedRowIndexes != want {
             context.coordinator.updatingSelection = true
             table.selectRowIndexes(want, byExtendingSelection: false)
