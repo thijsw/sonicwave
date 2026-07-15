@@ -55,4 +55,55 @@ struct RequestBuildingTests {
             _ = try await client.streamURL(songId: "s1")
         }
     }
+
+    // MARK: formPost (large playlist mutations — issue #1)
+
+    @Test func playlistMutationsAreFlaggedForFormPost() {
+        #expect(Endpoint.createPlaylist(playlistId: "p1", songIds: ["s1"]).usesFormPost)
+        #expect(Endpoint.updatePlaylist(id: "p1", songIdsToAdd: ["s1"]).usesFormPost)
+        #expect(!Endpoint.ping.usesFormPost)
+        #expect(!Endpoint.openSubsonicExtensions.usesFormPost)
+        #expect(!Endpoint.playlist(id: "p1").usesFormPost)  // reads stay GET
+    }
+
+    @Test func formPostRequestCarriesParamsInBodyNotURL() async throws {
+        let creds = ServerCredentials(
+            baseURL: URL(string: "https://music.example.com")!,
+            username: "thijs", secret: "sesame", authMethod: .tokenSalt)
+        let client = SubsonicClient(credentials: InMemoryCredentialStore(creds))
+        let endpoint = Endpoint.createPlaylist(
+            playlistId: "p1", songIds: (1...2000).map { "song-\($0)" })
+        let request = try await client.formPostRequest(for: endpoint, using: creds)
+
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.query() == nil)                       // nothing in the URL
+        #expect(request.url?.path() == "/rest/createPlaylist.view")
+        #expect(request.value(forHTTPHeaderField: "Content-Type")?
+            .hasPrefix("application/x-www-form-urlencoded") == true)
+
+        let body = String(decoding: request.httpBody ?? Data(), as: UTF8.self)
+        #expect(body.contains("songId=song-2000"))
+        #expect(body.contains("u=thijs"))
+        #expect(body.contains("f=json"))
+        #expect(!body.contains("sesame"))                          // secret still never plaintext
+    }
+
+    @Test func formBodyEscapesPlusAndReservedCharacters() {
+        let body = String(decoding: SubsonicClient.formBody(items: [
+            .init(name: "name", value: "Rock + Roll & Friends")
+        ]), as: UTF8.self)
+        // '+' must be %2B (form decoding reads literal '+' as a space).
+        #expect(body == "name=Rock%20%2B%20Roll%20%26%20Friends")
+    }
+
+    @Test func extensionsBodyDecodes() throws {
+        let json = Data("""
+        {"openSubsonicExtensions":[
+            {"name":"formPost","versions":[1]},
+            {"name":"songLyrics","versions":[1,2]}
+        ]}
+        """.utf8)
+        let body = try JSONDecoder().decode(OpenSubsonicExtensionsBody.self, from: json)
+        #expect(body.openSubsonicExtensions?.contains { $0.name == "formPost" } == true)
+    }
 }

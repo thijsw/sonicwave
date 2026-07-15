@@ -13,6 +13,11 @@ actor SubsonicClient {
     private let session: URLSession
     private let decoder: JSONDecoder
 
+    /// Whether the current server supports the OpenSubsonic `formPost`
+    /// extension, resolved lazily on the first flagged endpoint and cached
+    /// per base URL (a reconnect to a different server re-resolves).
+    private var formPostSupport: (baseURL: URL, supported: Bool)?
+
     init(credentials: CredentialStore, session: URLSession = .shared) {
         self.credentials = credentials
         self.session = session
@@ -82,7 +87,24 @@ actor SubsonicClient {
         _ endpoint: Endpoint
     ) async throws(SubsonicError) -> SubsonicResponseWrapper<Body> {
         guard let creds = credentials.load() else { throw SubsonicError.notConfigured }
+        if endpoint.usesFormPost, await supportsFormPost(using: creds) {
+            return try await execute(try formPostRequest(for: endpoint, using: creds),
+                                     method: endpoint.method)
+        }
         return try await execute(try buildRequest(for: endpoint, using: creds), method: endpoint.method)
+    }
+
+    private func supportsFormPost(using creds: ServerCredentials) async -> Bool {
+        if let cached = formPostSupport, cached.baseURL == creds.baseURL { return cached.supported }
+        // `.openSubsonicExtensions` itself is a plain GET, so no recursion.
+        // Errors (non-OpenSubsonic server, transient outage) resolve to false
+        // without caching, so one hiccup can't disable POST for the session.
+        guard let body = try? await send(.openSubsonicExtensions, as: OpenSubsonicExtensionsBody.self) else {
+            return false
+        }
+        let supported = (body.openSubsonicExtensions ?? []).contains { $0.name == "formPost" }
+        formPostSupport = (creds.baseURL, supported)
+        return supported
     }
 
     private func execute<Body: Decodable & Sendable>(
@@ -122,27 +144,55 @@ actor SubsonicClient {
         return request
     }
 
+    /// POST variant for endpoints flagged `usesFormPost`: identical parameter
+    /// set (common + auth + endpoint), but carried in a form-encoded body so
+    /// huge parameter lists stay out of the URL.
+    func formPostRequest(for endpoint: Endpoint,
+                         using creds: ServerCredentials) throws(SubsonicError) -> URLRequest {
+        guard var components = URLComponents(url: creds.baseURL, resolvingAgainstBaseURL: false) else {
+            throw SubsonicError.invalidURL
+        }
+        components.path = Self.restPath(basePath: components.path, method: endpoint.method)
+        guard let url = components.url else { throw SubsonicError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 30
+        request.setValue("application/x-www-form-urlencoded; charset=utf-8",
+                         forHTTPHeaderField: "Content-Type")
+        request.httpBody = Self.formBody(items: commonItems + authItems(for: creds) + endpoint.queryItems)
+        return request
+    }
+
+    /// Percent-encode query items into a form body. `URLComponents` leaves `+`
+    /// literal (legal in a URL query), but form decoding reads `+` as a space —
+    /// escape it so a playlist named "A+B" survives the round trip.
+    static func formBody(items: [URLQueryItem]) -> Data {
+        var components = URLComponents()
+        components.queryItems = items
+        let query = components.percentEncodedQuery ?? ""
+        return Data(query.replacingOccurrences(of: "+", with: "%2B").utf8)
+    }
+
     private func url(for endpoint: Endpoint, using creds: ServerCredentials) throws(SubsonicError) -> URL {
         guard var components = URLComponents(url: creds.baseURL, resolvingAgainstBaseURL: false) else {
             throw SubsonicError.invalidURL
         }
-        let basePath = components.path.hasSuffix("/")
-            ? String(components.path.dropLast())
-            : components.path
-        components.path = basePath + "/rest/" + endpoint.method + ".view"
-
-        var items: [URLQueryItem] = [
-            .init(name: "v", value: Self.protocolVersion),
-            .init(name: "c", value: Self.clientName),
-            .init(name: "f", value: "json")
-        ]
-        items += authItems(for: creds)
-        items += endpoint.queryItems
-        components.queryItems = items
-
+        components.path = Self.restPath(basePath: components.path, method: endpoint.method)
+        components.queryItems = commonItems + authItems(for: creds) + endpoint.queryItems
         guard let url = components.url else { throw SubsonicError.invalidURL }
         return url
     }
+
+    private static func restPath(basePath: String, method: String) -> String {
+        let base = basePath.hasSuffix("/") ? String(basePath.dropLast()) : basePath
+        return base + "/rest/" + method + ".view"
+    }
+
+    private let commonItems: [URLQueryItem] = [
+        .init(name: "v", value: SubsonicClient.protocolVersion),
+        .init(name: "c", value: SubsonicClient.clientName),
+        .init(name: "f", value: "json")
+    ]
 
     private func authItems(for creds: ServerCredentials) -> [URLQueryItem] {
         switch creds.authMethod {

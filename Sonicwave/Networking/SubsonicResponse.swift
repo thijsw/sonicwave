@@ -124,3 +124,8 @@ struct ScanStatusBody: Decodable, Sendable {
     }
     var scanStatus: Status
 }
+
+struct OpenSubsonicExtensionsBody: Decodable, Sendable {
+    struct Extension: Decodable, Sendable { var name: String; var versions: [Int]? }
+    var openSubsonicExtensions: [Extension]?
+}

@@ -6,14 +6,23 @@ import Foundation
 struct Endpoint: Sendable {
     let method: String
     let queryItems: [URLQueryItem]
+    /// Mutations whose parameter lists grow with content (playlist song ids)
+    /// blow past typical URL limits around ~1,500 tracks. When the server
+    /// advertises the OpenSubsonic `formPost` extension, flagged endpoints are
+    /// sent as a form-encoded POST body instead (see `SubsonicClient`).
+    let usesFormPost: Bool
 
-    init(_ method: String, _ queryItems: [URLQueryItem] = []) {
+    init(_ method: String, _ queryItems: [URLQueryItem] = [], usesFormPost: Bool = false) {
         self.method = method
         self.queryItems = queryItems
+        self.usesFormPost = usesFormPost
     }
 
     // MARK: Connection
     static let ping = Endpoint("ping")
+
+    /// OpenSubsonic capability discovery; used to decide GET vs form POST.
+    static let openSubsonicExtensions = Endpoint("getOpenSubsonicExtensions")
 
     /// Ask the server to rescan its music folders (Settings → Connection,
     /// File → Update Server Library).
@@ -106,7 +115,7 @@ struct Endpoint: Sendable {
         if let playlistId { items.append(.init(name: "playlistId", value: playlistId)) }
         if let name { items.append(.init(name: "name", value: name)) }
         items += songIds.map { URLQueryItem(name: "songId", value: $0) }
-        return Endpoint("createPlaylist", items)
+        return Endpoint("createPlaylist", items, usesFormPost: true)
     }
 
     static func deletePlaylist(id: String) -> Endpoint {
@@ -124,6 +133,6 @@ struct Endpoint: Sendable {
         if let isPublic { items.append(.init(name: "public", value: isPublic ? "true" : "false")) }
         items += songIdsToAdd.map { URLQueryItem(name: "songIdToAdd", value: $0) }
         items += songIndexesToRemove.map { URLQueryItem(name: "songIndexToRemove", value: String($0)) }
-        return Endpoint("updatePlaylist", items)
+        return Endpoint("updatePlaylist", items, usesFormPost: true)
     }
 }
