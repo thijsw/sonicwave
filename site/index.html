@@ -166,9 +166,22 @@
 
     <article class="release">
       <header>
-        <span class="release-ver">0.2.0</span>
+        <span class="release-ver">0.3.0</span>
         <time datetime="2026-07-15">July 15, 2026</time>
         <span class="release-badge">Latest</span>
+      </header>
+      <ul>
+        <li><strong>Your queue survives a relaunch</strong> — the queue, current track and playhead save to your server and come back paused, exactly as left. Other clients can resume the same session.</li>
+        <li><strong>Volume normalization</strong> (Settings → Playback) — even out loudness with your files&rsquo; ReplayGain tags, by track or by album, with peak protection so nothing clips.</li>
+        <li><strong>Plain-HTTP home servers connect now</strong> — addresses like <code>http://nas.local</code> were silently blocked by macOS; local plain-HTTP is allowed, and non-local <code>http://</code> fails with a clear message.</li>
+        <li><strong>Huge playlists no longer fail</strong> — creating or reordering past ~1,500 tracks now travels as a POST body instead of an over-long URL.</li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <header>
+        <span class="release-ver">0.2.0</span>
+        <time datetime="2026-07-15">July 15, 2026</time>
       </header>
       <ul>
         <li><strong>Home page</strong> — a time-of-day greeting, a &ldquo;Jump Back In&rdquo; card for your last album, and Keep Listening, Recently Added, Most Played and Random shelves.</li>

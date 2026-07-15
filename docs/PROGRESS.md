@@ -50,6 +50,12 @@ xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
 
 ---
 
+## v0.3.0 released (2026-07-15)
+Build 6, notarized/stapled/Gatekeeper-accepted, zip on the GitHub Release
+with hand-written notes. Ships the issue burn-down below (queue
+persistence, ReplayGain, formPost playlists, local plain-HTTP). Website
+changelog updated; the release-triggered Pages deploy stamps 0.3.0.
+
 ## Issue burn-down: #1 #2 #5 #6 (2026-07-15)
 First four tracker issues closed (from the competitive research round):
 - **#2 — plain-HTTP home servers** (`88eaff3`): partial `Info.plist`
