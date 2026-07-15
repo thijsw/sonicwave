@@ -126,6 +126,8 @@ private struct PlaybackSettingsView: View {
     @AppStorage("matchDeviceSampleRate") private var matchSampleRate = true
     /// Scrobbling (PlayerModel reads the same key, defaulting to on).
     @AppStorage("scrobbleEnabled") private var scrobbleEnabled = true
+    /// Volume normalization (PlayerModel+ReplayGain reads the same key).
+    @AppStorage("replayGainMode") private var replayGainMode = ReplayGainMode.off.rawValue
 
     /// The chosen device is currently absent (e.g. Bluetooth disconnected).
     /// Audio falls back to the system default; the choice sticks so it re-pins
@@ -166,6 +168,15 @@ private struct PlaybackSettingsView: View {
                 Toggle("Match hardware sample rate", isOn: $matchSampleRate)
                 Text("Runs the output device at each track's native sample rate, so nothing is resampled " +
                      "on the way to your DAC. Other apps sharing the device may blip when the rate changes.")
+                    .font(.callout).foregroundStyle(.secondary)
+                Picker("Volume normalization", selection: $replayGainMode) {
+                    Text("Off").tag(ReplayGainMode.off.rawValue)
+                    Text("By Track").tag(ReplayGainMode.track.rawValue)
+                    Text("By Album").tag(ReplayGainMode.album.rawValue)
+                }
+                Text("Evens out loudness between tracks using the files' ReplayGain tags. " +
+                     "\u{201C}By Album\u{201D} keeps an album's intended dynamics; changes apply " +
+                     "from the next track.")
                     .font(.callout).foregroundStyle(.secondary)
             }
             Section("Streaming") {

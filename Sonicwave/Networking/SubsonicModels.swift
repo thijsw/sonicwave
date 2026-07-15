@@ -29,6 +29,9 @@ struct Song: Identifiable, Codable, Sendable, Hashable {
     var size: Int?
     var starred: Date?
     var genres: [GenreRef]?
+    /// OpenSubsonic loudness tags, carried through by Navidrome when the
+    /// files are tagged. Drives volume normalization (see ReplayGainMode).
+    var replayGain: ReplayGainInfo?
 
     var isStarred: Bool { starred != nil }
     /// Genre for display, preferring the legacy field, then the OpenSubsonic array.
@@ -62,6 +65,7 @@ struct Song: Identifiable, Codable, Sendable, Hashable {
     enum CodingKeys: String, CodingKey {
         case id, title, artist, artistId, album, albumId, coverArt, duration
         case track, discNumber, year, genre, genres, bitRate, suffix, contentType, size, starred
+        case replayGain
     }
 }
 
@@ -113,4 +117,13 @@ struct Playlist: Identifiable, Codable, Sendable, Hashable {
     var changed: Date?
     var coverArt: String?
     var entry: [Song]?
+}
+
+/// OpenSubsonic `replayGain` on a song: gains are dB adjustments relative to
+/// the reference loudness; peaks are linear sample maxima (1.0 = full scale).
+struct ReplayGainInfo: Codable, Sendable, Hashable {
+    var trackGain: Double?
+    var albumGain: Double?
+    var trackPeak: Double?
+    var albumPeak: Double?
 }

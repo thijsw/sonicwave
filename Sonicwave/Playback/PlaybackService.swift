@@ -3,6 +3,7 @@
 // is one actor by design; splitting it across files would mean exposing its
 // private state. Kept whole, with extensions marking the functional areas.
 import Foundation
+import Accelerate
 import AVFoundation
 import CoreAudio
 import AudioToolbox
@@ -54,6 +55,8 @@ actor PlaybackService {
         let index: Int
         let duration: TimeInterval
         let seekBase: TimeInterval
+        /// Linear ReplayGain multiplier baked into this span's buffers.
+        let gain: Float
         var startFrame: AVAudioFramePosition
         var frameCount: AVAudioFramePosition
         var decodeComplete: Bool
@@ -66,6 +69,7 @@ actor PlaybackService {
         let duration: TimeInterval
         let index: Int
         let seekBase: TimeInterval
+        let gain: Float
         let gen: Int
         let timelineStart: Bool
     }
@@ -143,7 +147,8 @@ actor PlaybackService {
 extension PlaybackService {
     /// Hard-start a track from `time` seconds in (default 0). Resets the gapless
     /// timeline. Used for first play, manual skip and seek.
-    func play(songId: String, suffix: String?, duration: TimeInterval, index: Int, from time: TimeInterval = 0) {
+    func play(songId: String, suffix: String?, duration: TimeInterval, index: Int,
+              from time: TimeInterval = 0, gain: Float = 1) {
         generation += 1
         let gen = generation
         hardReset()
@@ -153,15 +158,16 @@ extension PlaybackService {
         emit(.stateChanged(.buffering))
         if time > 0 { emit(.position(time: time, duration: duration)) }
         startDecode(DecodeRequest(songId: songId, suffix: suffix, duration: duration, index: index,
-                                  seekBase: time, gen: gen, timelineStart: true))
+                                  seekBase: time, gain: gain, gen: gen, timelineStart: true))
     }
 
     /// Provide the next track to pre-buffer (reply to `.wantNext`).
-    func enqueueNext(songId: String, suffix: String?, duration: TimeInterval, index: Int) {
+    func enqueueNext(songId: String, suffix: String?, duration: TimeInterval, index: Int,
+                     gain: Float = 1) {
         guard awaitingNext else { return }
         awaitingNext = false
         startDecode(DecodeRequest(songId: songId, suffix: suffix, duration: duration, index: index,
-                                  seekBase: 0, gen: generation, timelineStart: false))
+                                  seekBase: 0, gain: gain, gen: generation, timelineStart: false))
     }
 
     /// No successor — the current track is the last one.
@@ -209,7 +215,7 @@ extension PlaybackService {
     private func startDecode(_ request: DecodeRequest) {
         // Begin a new span starting at the current end of the scheduled timeline.
         let span = TrackSpan(id: request.songId, index: request.index, duration: request.duration,
-                             seekBase: request.seekBase,
+                             seekBase: request.seekBase, gain: request.gain,
                              startFrame: cumulativeFrames, frameCount: 0, decodeComplete: false)
         spans.append(span)
         let spanArrayIndex = spans.count - 1
@@ -479,6 +485,12 @@ extension PlaybackService {
             }
         }
 
+        // ReplayGain: bake the span's normalization into the samples. The
+        // engine has one shared player node (gapless spans share a timeline),
+        // so per-track gain can't ride node volume — it must live in the
+        // buffers themselves. Float32 in-place scale; no-op at unity.
+        applyGain(spans[spanArrayIndex].gain, to: buffer)
+
         let frames = AVAudioFramePosition(buffer.frameLength)
         spans[spanArrayIndex].frameCount += frames
         cumulativeFrames += frames
@@ -491,6 +503,15 @@ extension PlaybackService {
         // Pre-roll: only start once enough audio is buffered to avoid underruns.
         if !hasStartedPlayback && !isPaused && cumulativeFrames >= prerollFrames {
             startNodePlayback()
+        }
+    }
+
+    private func applyGain(_ gain: Float, to buffer: AVAudioPCMBuffer) {
+        guard gain != 1, let channels = buffer.floatChannelData else { return }
+        var factor = gain
+        let frames = vDSP_Length(buffer.frameLength)
+        for channel in 0..<Int(buffer.format.channelCount) {
+            vDSP_vsmul(channels[channel], 1, &factor, channels[channel], 1, frames)
         }
     }
 
@@ -549,7 +570,8 @@ extension PlaybackService {
     /// Seek re-opens the current track at `time` (Option A has no random access).
     func seek(to time: TimeInterval) {
         guard let active = activeSpan() else { return }
-        play(songId: active.id, suffix: nil, duration: active.duration, index: active.index, from: time)
+        play(songId: active.id, suffix: nil, duration: active.duration, index: active.index,
+             from: time, gain: active.gain)
     }
 
     // MARK: - Position / boundary detection

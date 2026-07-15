@@ -273,7 +273,9 @@ extension PlayerModel {
         let id = track.id
         let suffix = track.suffix
         let dur = TimeInterval(track.duration ?? 0)
-        forward { await $0.play(songId: id, suffix: suffix, duration: dur, index: index, from: time) }
+        let gain = replayGain(for: track)
+        forward { await $0.play(songId: id, suffix: suffix, duration: dur, index: index,
+                                from: time, gain: gain) }
     }
 
     private func clearPlayback() {
@@ -395,7 +397,9 @@ extension PlayerModel {
         let id = song.id
         let suffix = song.suffix
         let dur = TimeInterval(song.duration ?? 0)
-        Task { await playback.enqueueNext(songId: id, suffix: suffix, duration: dur, index: target) }
+        let gain = replayGain(for: song)
+        Task { await playback.enqueueNext(songId: id, suffix: suffix, duration: dur,
+                                          index: target, gain: gain) }
     }
 
     // MARK: - Now Playing
