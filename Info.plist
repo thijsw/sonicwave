@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+Partial Info.plist, merged into the build-setting-generated one
+(GENERATE_INFOPLIST_FILE stays YES). Exists solely for keys that have no
+INFOPLIST_KEY_* build setting.
+
+ATS: home servers are commonly plain HTTP on the LAN (http://nas.local,
+http://192.168.x.x). NSAllowsLocalNetworking permits exactly that without
+opening arbitrary cleartext to the internet (NSAllowsArbitraryLoads stays
+off). Non-local plain-HTTP remains blocked by ATS; SubsonicClient maps that
+failure to an actionable message. See issue #2.
+-->
+<plist version="1.0">
+<dict>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+    </dict>
+</dict>
+</plist>

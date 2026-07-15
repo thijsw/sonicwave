@@ -37,4 +37,20 @@ struct ConnectionTests {
     @Test func rejectsEmpty() {
         #expect(norm("   ") == nil)
     }
+
+    @Test func atsBlockGetsActionableTransportMessage() {
+        let err = SubsonicError.transport(
+            from: URLError(.appTransportSecurityRequiresSecureConnection))
+        #expect(err.userMessage.contains("https://"))
+        #expect(err.userMessage.contains("nas.local"))
+    }
+
+    @Test func otherURLErrorsKeepTheirDescription() {
+        let err = SubsonicError.transport(from: URLError(.timedOut))
+        if case let .transport(message) = err {
+            #expect(message == URLError(.timedOut).localizedDescription)
+        } else {
+            Issue.record("expected .transport")
+        }
+    }
 }

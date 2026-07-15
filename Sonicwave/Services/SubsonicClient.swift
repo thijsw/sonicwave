@@ -93,7 +93,7 @@ actor SubsonicClient {
         do {
             (data, response) = try await session.data(for: request)
         } catch {
-            throw SubsonicError.transport(error.localizedDescription)
+            throw SubsonicError.transport(from: error)
         }
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             throw SubsonicError.http(status: http.statusCode)
