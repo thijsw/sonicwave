@@ -81,7 +81,7 @@ struct RequestBuildingTests {
         #expect(request.value(forHTTPHeaderField: "Content-Type")?
             .hasPrefix("application/x-www-form-urlencoded") == true)
 
-        let body = String(decoding: request.httpBody ?? Data(), as: UTF8.self)
+        let body = String(bytes: request.httpBody ?? Data(), encoding: .utf8) ?? ""
         #expect(body.contains("songId=song-2000"))
         #expect(body.contains("u=thijs"))
         #expect(body.contains("f=json"))
@@ -89,9 +89,9 @@ struct RequestBuildingTests {
     }
 
     @Test func formBodyEscapesPlusAndReservedCharacters() {
-        let body = String(decoding: SubsonicClient.formBody(items: [
+        let body = String(bytes: SubsonicClient.formBody(items: [
             .init(name: "name", value: "Rock + Roll & Friends")
-        ]), as: UTF8.self)
+        ]), encoding: .utf8) ?? ""
         // '+' must be %2B (form decoding reads literal '+' as a space).
         #expect(body == "name=Rock%20%2B%20Roll%20%26%20Friends")
     }
