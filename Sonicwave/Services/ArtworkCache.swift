@@ -32,6 +32,11 @@ final class ArtworkCache {
     /// the inline `ClientBox(client)` deallocate immediately → no artwork.
     var clientBox: ClientBox?
 
+    /// Network fetches only (disk hits bypass): Navidrome rate-limits cover
+    /// art by default, and a Home page + grid can otherwise fire dozens of
+    /// simultaneous getCoverArt calls. See issue #4.
+    private let fetchLimiter = AsyncLimiter(limit: 6)
+
     init() {
         cache.countLimit = 400
         let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
@@ -62,8 +67,10 @@ final class ArtworkCache {
 
         let client = clientBox.client
         let dir = serverDir()
+        let limiter = fetchLimiter
         let task = Task<NSImage?, Never> { [weak self] in
-            let image = await Self.load(id: id, size: size, client: client, dir: dir)
+            let image = await Self.load(id: id, size: size, client: client, dir: dir,
+                                        limiter: limiter)
             if let self, let image {
                 self.cache.setObject(image, forKey: key as NSString)
                 if !(self.sizesByID[id]?.contains(size) ?? false) {
@@ -144,18 +151,52 @@ final class ArtworkCache {
     }
 
     private nonisolated static func load(id: String, size: Int,
-                                         client: SubsonicClient, dir: URL) async -> NSImage? {
+                                         client: SubsonicClient, dir: URL,
+                                         limiter: AsyncLimiter) async -> NSImage? {
         let fileURL = dir.appendingPathComponent(filename(id: id, size: size))
-        // Disk first: cover art doesn't change, so a hit is authoritative.
+        // Disk first: cover art doesn't change, so a hit is authoritative
+        // (and never waits on the network limiter).
         if let data = try? Data(contentsOf: fileURL), let image = NSImage(data: data) {
             return image
         }
-        // Otherwise fetch, then persist the original bytes (keeps webp/jpeg, small).
-        guard let url = try? await client.coverArtURL(id: id, size: size),
-              let (data, _) = try? await URLSession.shared.data(from: url),
-              let image = NSImage(data: data) else { return nil }
+        guard let url = try? await client.coverArtURL(id: id, size: size) else { return nil }
+
+        // Fetch behind the concurrency cap; a rate-limited response gets one
+        // retry after the server's Retry-After (or a 2s default).
+        var result = await limiter.run { await fetch(url) }
+        if case let .rateLimited(delay) = result {
+            try? await Task.sleep(for: .seconds(delay))
+            result = await limiter.run { await fetch(url) }
+        }
+        guard case let .image(data, image) = result else { return nil }
         try? data.write(to: fileURL, options: .atomic)
         return image
+    }
+
+    private enum FetchResult {
+        case image(Data, NSImage)
+        case rateLimited(TimeInterval)
+        case failed
+    }
+
+    private nonisolated static func fetch(_ url: URL) async -> FetchResult {
+        guard let (data, response) = try? await URLSession.shared.data(from: url) else {
+            return .failed
+        }
+        if let http = response as? HTTPURLResponse, http.statusCode == 429 {
+            return .rateLimited(retryDelay(from: http))
+        }
+        guard let image = NSImage(data: data) else { return .failed }
+        return .image(data, image)
+    }
+
+    /// Seconds to wait per the 429's Retry-After header (delta-seconds form),
+    /// clamped to something sane; 2s when absent or unparseable.
+    nonisolated static func retryDelay(from response: HTTPURLResponse) -> TimeInterval {
+        guard let raw = response.value(forHTTPHeaderField: "Retry-After"),
+              let seconds = TimeInterval(raw.trimmingCharacters(in: .whitespaces)),
+              seconds > 0 else { return 2 }
+        return min(seconds, 30)
     }
 
     private nonisolated static func filename(id: String, size: Int) -> String {
