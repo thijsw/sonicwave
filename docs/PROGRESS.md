@@ -50,6 +50,56 @@ xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
 
 ---
 
+## FLAC streaming was broken — parser corruption from in-callback buffers (2026-07-16)
+Found while live-verifying the issue batch below: playing any FLAC album
+decoded ~0.5s per track, then raced through the queue to the end. Weeks of
+MP3-only listening had masked it — **FLAC never worked** via the
+progressive pipeline.
+- **Symptom:** `AudioFileStreamParseBytes` returns `'wht?'`
+  (kAudioFileStreamError_UnsupportedFileType) mid-stream after ~6 FLAC
+  frames; no `failureMessage` (format WAS discovered), so each track ends
+  after ~24K frames → instant gapless boundary → next track → race.
+- **Diagnosis:** dumped the real stream via a throwaway in-target test
+  (server bytes = pristine FLAC), then bisected standalone: identical bytes
+  parse cleanly with no-op callbacks; constructing **AVAudioCompressedBuffer
+  inside the AudioFileStream packets callback corrupts the FLAC parser**
+  (AVAudioConverter creation in the property callback is innocent; MP3
+  tolerates all of it, which is why this never surfaced).
+- **Fix:** the packets callback now only copies raw bytes + packet
+  descriptions (`PendingPackets`); buffer construction and conversion run
+  after ParseBytes returns (`drainPendingPackets` from `parse()`/`finish()`).
+  Verified: the dumped 25MB track decodes 10.6M/10.6M frames, and The
+  Blueprint (13 FLACs) plays normally in the app. Hermetic regression test
+  (`FlacStreamingTests`) synthesizes a FLAC via AVAudioFile and streams it
+  in 4KB chunks — reproduces the corruption on the old code.
+- Red herrings worth remembering: server-side player transcoding (wasn't),
+  ATS hints (wasn't), Retry-After chunk sizes (wasn't). The winning move
+  was dumping real bytes and bisecting the callback work standalone.
+
+## Issue batch: #4 #7 #8 #9 #10 (2026-07-15/16)
+- **#7 Shuffle All** (`64c9727`): Controls → Shuffle Library + Songs header
+  button; fresh 500-song `getRandomSongs` batch.
+- **#4 artwork throttling** (`d72fb54`): `AsyncLimiter` (FIFO semaphore
+  actor) caps fetches at 6; 429s get one retry after Retry-After (2s
+  default, 30s clamp); disk hits bypass.
+- **#10 transcode retry** (`29dafc6`): undecodable current track retries
+  once as forced mp3 (suffix "mp3" too — the stream is mp3 whatever the
+  file was); followers inherit the timeline's forceTranscode so a fully
+  unsupported album doesn't race; recovery/seek preserve gain + transcode.
+- **#9 album filters** (`6ccc37f`): genre/decade via byGenre/byYear list
+  types; sort disabled while filtered; playlists CRUD split to
+  LibraryModel+Playlists for the type-length lint.
+- **#8 disc headers** (`cdfac38`): TrackTableRow maps unselectable sticky
+  group rows over the AppKit table; all external contracts stay in
+  track-index space; headers only in disc order; subtitles from discTitles.
+- Live-verified: filters (Rap → 1 album, sort disabled), Shuffle Library
+  (cross-library mix), single-disc album renders headerless with correct
+  play-index mapping. Multi-disc live check pending a multi-disc album in
+  the library (row math unit-tested). Suite: 89 → **102 tests**.
+- Verification gotcha: computer-driven UI clicks/screenshots cost 5-18s
+  each — position math must use timestamps, and a stale app instance from
+  a previous day can shadow the fresh build (`ps` first, then `open`).
+
 ## v0.3.0 released (2026-07-15)
 Build 6, notarized/stapled/Gatekeeper-accepted, zip on the GitHub Release
 with hand-written notes. Ships the issue burn-down below (queue

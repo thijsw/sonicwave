@@ -167,12 +167,19 @@ extension PlaybackService {
     }
 
     /// Provide the next track to pre-buffer (reply to `.wantNext`).
+    /// Followers inherit the timeline's forced transcoding: once one track
+    /// needed the server's help (e.g. the server insists on a format
+    /// CoreAudio can't read), its successors will too — without this, each
+    /// follower fails in turn and playback races through the queue.
     func enqueueNext(songId: String, suffix: String?, duration: TimeInterval, index: Int,
                      gain: Float = 1) {
         guard awaitingNext else { return }
         awaitingNext = false
-        startDecode(DecodeRequest(songId: songId, suffix: suffix, duration: duration, index: index,
-                                  seekBase: 0, gain: gain, gen: generation, timelineStart: false))
+        let inherited = spans.last?.forceTranscode ?? false
+        startDecode(DecodeRequest(songId: songId, suffix: inherited ? "mp3" : suffix,
+                                  duration: duration, index: index,
+                                  seekBase: 0, gain: gain, gen: generation, timelineStart: false,
+                                  forceTranscode: inherited))
     }
 
     /// No successor — the current track is the last one.
@@ -282,8 +289,16 @@ extension PlaybackService {
     /// that has already declared the stream undecodable.
     private func pump(url: URL, into source: ProgressiveAudioSource, gen: Int) async {
         let loader = DataStreamLoader()
+        var first = true
         do {
             for try await chunk in loader.stream(from: url) {
+                if first {
+                    first = false
+                    // What actually came down the wire — the server may ignore
+                    // our format request (per-player transcoding profiles).
+                    let magic = chunk.prefix(8).map { String(format: "%02x", $0) }.joined()
+                    Self.log.info("stream first bytes: \(magic, privacy: .public)")
+                }
                 if gen != generation || Task.isCancelled { break }
                 await throttleReadAhead(loader: loader, gen: gen)
                 if gen != generation || Task.isCancelled { break }
@@ -327,7 +342,8 @@ extension PlaybackService {
                                            timelineStart: request.timelineStart,
                                            userFormat: TranscodePrefs.current().format) else { return false }
         Self.log.info("decode failed for \(request.songId, privacy: .public); retrying via server transcoding")
-        play(songId: request.songId, suffix: request.suffix, duration: request.duration,
+        // The retried stream is mp3, whatever the file's own suffix says.
+        play(songId: request.songId, suffix: "mp3", duration: request.duration,
              index: request.index, from: request.seekBase, gain: request.gain,
              forceTranscode: true)
         return true
