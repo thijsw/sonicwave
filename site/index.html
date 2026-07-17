@@ -166,9 +166,23 @@
 
     <article class="release">
       <header>
+        <span class="release-ver">0.4.0</span>
+        <time datetime="2026-07-17">July 17, 2026</time>
+        <span class="release-badge">Latest</span>
+      </header>
+      <ul>
+        <li><strong>FLAC playback, actually fixed</strong> — a subtle decoder bug made FLAC albums play ~half a second per track, then skip on. They now stream gapless like everything else.</li>
+        <li><strong>Unplayable formats play anyway</strong> — Ogg Vorbis and friends fall back to server transcoding automatically, whole album included.</li>
+        <li><strong>Filter the Albums grid</strong> by genre or decade; <strong>Shuffle Library</strong> queues a fresh 500-song mix of everything.</li>
+        <li><strong>Disc headers</strong> on multi-disc albums, with disc subtitles when tagged.</li>
+        <li>Cover-art fetching respects server rate limits (capped, with backoff) — no more permanently blank covers.</li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <header>
         <span class="release-ver">0.3.0</span>
         <time datetime="2026-07-15">July 15, 2026</time>
-        <span class="release-badge">Latest</span>
       </header>
       <ul>
         <li><strong>Your queue survives a relaunch</strong> — the queue, current track and playhead save to your server and come back paused, exactly as left. Other clients can resume the same session.</li>

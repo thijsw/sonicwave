@@ -50,6 +50,12 @@ xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
 
 ---
 
+## v0.4.0 released (2026-07-17)
+Build 7, notarized/stapled/Gatekeeper-accepted, hand-written notes. Ships
+the FLAC streaming fix (headline), transcode fallback, album filters,
+Shuffle Library, disc headers, artwork throttling. Website changelog
+updated; release-triggered Pages deploy stamps 0.4.0.
+
 ## FLAC streaming was broken — parser corruption from in-callback buffers (2026-07-16)
 Found while live-verifying the issue batch below: playing any FLAC album
 decoded ~0.5s per track, then raced through the queue to the end. Weeks of
