@@ -13,3 +13,5 @@ log.txt
 
 # Release pipeline output
 build/
+# Local marketing drafts — not for the public repo
+drafts/
