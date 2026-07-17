@@ -35,7 +35,10 @@ swiftlint   # config in .swiftlint.yml; must pass clean
 - Releases: `scripts/publish.sh <version>` (bump → notarized build → tag →
   GitHub Release). The website (`site/`, GitHub Pages via
   `.github/workflows/pages.yml`) redeploys itself on release and stamps the
-  latest version into the page — no manual edits needed.
+  latest version into the page — no manual edits needed. After publishing:
+  hand-write the release notes (`gh release edit`), add a website changelog
+  entry, log in PROGRESS.md, and **sync README.md** with the shipped
+  feature set (briefly — fold into existing bullets).
 
 ## Hard-won gotchas (don't re-break these)
 
