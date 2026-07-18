@@ -56,7 +56,9 @@ struct NowPlayingPanel: View {
                     .foregroundStyle(.secondary).font(.callout)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .dropDestination(for: DraggedTrack.self) { items, _ in
-                        let songs = items.compactMap(\.song)
+                        // Multi-item drops arrive in no guaranteed order —
+                        // the source row index restores the on-screen order.
+                        let songs = items.sorted { $0.index < $1.index }.compactMap(\.song)
                         guard !songs.isEmpty else { return false }
                         player.enqueue(songs)
                         return true
@@ -107,11 +109,13 @@ struct NowPlayingPanel: View {
         }
     }
 
-    /// Decode `DraggedTrack` payloads from dropped item providers (in order)
-    /// and insert their songs at the given queue index.
+    /// Decode `DraggedTrack` payloads from dropped item providers and insert
+    /// their songs at the given queue index. Provider order isn't guaranteed
+    /// for multi-item drags — the payloads' source row indices restore the
+    /// order the user grabbed.
     private func insertDropped(_ providers: [NSItemProvider], at index: Int) {
         Task {
-            var songs: [Song] = []
+            var dropped: [DraggedTrack] = []
             for provider in providers {
                 let data: Data? = await withCheckedContinuation { continuation in
                     _ = provider.loadDataRepresentation(forTypeIdentifier: UTType.json.identifier) { data, _ in
@@ -119,11 +123,11 @@ struct NowPlayingPanel: View {
                     }
                 }
                 if let data,
-                   let dragged = try? JSONDecoder().decode(DraggedTrack.self, from: data),
-                   let song = dragged.song {
-                    songs.append(song)
+                   let dragged = try? JSONDecoder().decode(DraggedTrack.self, from: data) {
+                    dropped.append(dragged)
                 }
             }
+            let songs = dropped.sorted { $0.index < $1.index }.compactMap(\.song)
             player.insertInQueue(songs, at: index)
         }
     }

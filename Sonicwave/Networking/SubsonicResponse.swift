@@ -130,6 +130,43 @@ struct OpenSubsonicExtensionsBody: Decodable, Sendable {
     var openSubsonicExtensions: [Extension]?
 }
 
+struct ArtistInfo2Body: Decodable, Sendable {
+    struct Info: Decodable, Sendable {
+        var biography: String?
+        var similarArtist: [Artist]?
+    }
+    var artistInfo2: Info
+}
+
+extension ArtistInfo2Body.Info {
+    /// The bio flattened for display: the trailing "Read more on Last.fm"
+    /// link is dropped, remaining HTML tags stripped, common entities
+    /// decoded. nil when nothing readable is left.
+    var plainBiography: String? {
+        guard var text = biography else { return nil }
+        text = text.replacingOccurrences(of: "<a\\s[^>]*>Read more[^<]*</a>", with: "",
+                                         options: [.regularExpression, .caseInsensitive])
+        text = text.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+        let entities = ["&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": "\"",
+                        "&#34;": "\"", "&#39;": "'", "&apos;": "'", "&nbsp;": " "]
+        for (entity, character) in entities {
+            text = text.replacingOccurrences(of: entity, with: character)
+        }
+        text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
+    }
+}
+
+struct SimilarSongs2Body: Decodable, Sendable {
+    struct Container: Decodable, Sendable { var song: [Song]? }
+    var similarSongs2: Container
+}
+
+struct TopSongsBody: Decodable, Sendable {
+    struct Container: Decodable, Sendable { var song: [Song]? }
+    var topSongs: Container
+}
+
 struct PlayQueueBody: Decodable, Sendable {
     var playQueue: PlayQueue?
 }

@@ -68,6 +68,53 @@ struct DecodingTests {
         #expect(song.displayGenre == "Jazz")
     }
 
+    @Test func decodesArtistInfo2AndFlattensBioHTML() throws {
+        let json = """
+        {"subsonic-response":{"status":"ok","version":"1.16.1","artistInfo2":{
+        "biography":"Miles Davis was an American trumpeter &amp; bandleader. \
+        <a href=\\"https://www.last.fm/music/Miles+Davis\\" rel=\\"nofollow\\">Read more on Last.fm</a>",
+        "largeImageUrl":"https://example/img.jpg",
+        "similarArtist":[{"id":"ar2","name":"John Coltrane","coverArt":"ar-ar2","albumCount":3}]}}}
+        """
+        let wrapper = try decoder.decode(SubsonicResponseWrapper<ArtistInfo2Body>.self,
+                                         from: Data(json.utf8))
+        let info = try #require(wrapper.response.body?.artistInfo2)
+        #expect(info.similarArtist?.first?.name == "John Coltrane")
+        let bio = try #require(info.plainBiography)
+        #expect(bio == "Miles Davis was an American trumpeter & bandleader.")
+    }
+
+    @Test func decodesSimilarSongs2() throws {
+        let json = """
+        {"subsonic-response":{"status":"ok","version":"1.16.1","similarSongs2":{"song":[
+        {"id":"s1","title":"So What","artist":"Miles Davis","duration":545},
+        {"id":"s2","title":"Naima","artist":"John Coltrane","duration":263}]}}}
+        """
+        let wrapper = try decoder.decode(SubsonicResponseWrapper<SimilarSongs2Body>.self,
+                                         from: Data(json.utf8))
+        let songs = try #require(wrapper.response.body?.similarSongs2.song)
+        #expect(songs.count == 2)
+        #expect(songs[1].title == "Naima")
+    }
+
+    @Test func decodesTopSongsAndEmptyContainer() throws {
+        let json = """
+        {"subsonic-response":{"status":"ok","version":"1.16.1","topSongs":{"song":[
+        {"id":"s1","title":"Blue in Green","artist":"Miles Davis","duration":328}]}}}
+        """
+        let wrapper = try decoder.decode(SubsonicResponseWrapper<TopSongsBody>.self,
+                                         from: Data(json.utf8))
+        #expect(wrapper.response.body?.topSongs.song?.count == 1)
+
+        // Servers with no data send an empty object — must not throw.
+        let empty = """
+        {"subsonic-response":{"status":"ok","version":"1.16.1","topSongs":{}}}
+        """
+        let emptyWrapper = try decoder.decode(SubsonicResponseWrapper<TopSongsBody>.self,
+                                              from: Data(empty.utf8))
+        #expect(emptyWrapper.response.body?.topSongs.song == nil)
+    }
+
     @Test func decodesDatesWithoutFractionalSeconds() throws {
         let json = """
         {"subsonic-response":{"status":"ok","version":"1.16.1","album":{

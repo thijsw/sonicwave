@@ -293,6 +293,48 @@ final class LibraryModel {
             return []
         }
     }
+
+    // MARK: - Discovery (artist info, radio mixes, album shuffle)
+
+    /// Bio + similar artists for the artist page. Best-effort: nil simply
+    /// hides the extras (servers without a metadata agent return little).
+    func artistInfo(id: String) async -> ArtistInfo2Body.Info? {
+        try? await client.send(.artistInfo2(id: id, count: 12), as: ArtistInfo2Body.self).artistInfo2
+    }
+
+    /// Similar-song mix seeding Start Radio. `id` may be a song or artist id.
+    func similarSongs(id: String, count: Int = 50) async -> [Song] {
+        let body = try? await client.send(.similarSongs2(id: id, count: count),
+                                          as: SimilarSongs2Body.self)
+        return body?.similarSongs2.song ?? []
+    }
+
+    /// Radio fallback for servers with no similarity data for an artist.
+    func topSongs(artist name: String, count: Int = 50) async -> [Song] {
+        let body = try? await client.send(.topSongs(artist: name, count: count),
+                                          as: TopSongsBody.self)
+        return body?.topSongs.song ?? []
+    }
+
+    /// Random whole albums for Shuffle Albums, honoring the active grid
+    /// filter. Without one the server randomizes; genre/year are list types
+    /// with no random order, so sample a large filtered page client-side.
+    func randomAlbums(count: Int = 12) async -> [Album] {
+        let endpoint: Endpoint
+        switch albumFilter {
+        case .none:
+            endpoint = .albumList2(type: "random", size: count, offset: 0)
+        case let .genre(name):
+            endpoint = .albumList2(type: "byGenre", size: 200, offset: 0, genre: name)
+        case let .years(from, through):
+            endpoint = .albumList2(type: "byYear", size: 200, offset: 0,
+                                   fromYear: from, toYear: through)
+        }
+        let body = try? await client.send(endpoint, as: AlbumList2Body.self)
+        let albums = body?.albumList2.album ?? []
+        if case .none = albumFilter { return albums }
+        return Array(albums.shuffled().prefix(count))
+    }
 }
 
 // MARK: - Home shelves

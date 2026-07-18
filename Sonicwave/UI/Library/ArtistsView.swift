@@ -4,6 +4,7 @@ import SwiftUI
 /// the left, the selected artist's albums on the right. Search hands an artist
 /// off via `Navigator.pendingArtist`. See docs/04-ui-ux.md.
 struct ArtistsView: View {
+    @Environment(AppModel.self) private var app
     @Environment(LibraryModel.self) private var library
     @Environment(Navigator.self) private var navigator
     @State private var selectedID: Artist.ID?
@@ -33,6 +34,10 @@ struct ArtistsView: View {
                     // highlight — suppressed below — renders the accent
                     // muted through the list material).
                     .listRowBackground(isSelected ? Color.accentColor : nil)
+                    .contextMenu {
+                        Button("Start Artist Radio") { app.startRadio(from: artist) }
+                            .disabled(app.isPreparingMix)
+                    }
                 }
             }
             .listStyle(.plain)
@@ -62,19 +67,23 @@ struct ArtistsView: View {
     }
 }
 
-/// The selected artist's albums as a grid; selecting one opens the album
-/// in place (via `Navigator`).
+/// The selected artist's albums as a grid, under a header with the artist's
+/// portrait, bio (from `getArtistInfo2`) and an Artist Radio button; similar
+/// artists shelf below. Selecting an album opens it in place (via `Navigator`).
 struct ArtistDetailView: View {
     let artist: Artist
+    @Environment(AppModel.self) private var app
     @Environment(LibraryModel.self) private var library
     @Environment(Navigator.self) private var navigator
     @State private var albums: [Album] = []
+    @State private var info: ArtistInfo2Body.Info?
+    @State private var bioExpanded = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text(artist.name).font(.title2).bold()
-                    .padding(.horizontal).padding(.top, 14)
+                header
+                bio
                 AlignedAdaptiveGrid(tileMinimum: 150, spacing: 16) {
                     ForEach(albums) { album in
                         Button { navigator.openAlbum(album) } label: {
@@ -86,9 +95,74 @@ struct ArtistDetailView: View {
                     }
                 }
                 .padding()
+                similarArtists
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .task(id: artist.id) { albums = await library.albums(forArtist: artist.id) }
+        .task(id: artist.id) {
+            bioExpanded = false
+            async let albumsLoad = library.albums(forArtist: artist.id)
+            async let infoLoad = library.artistInfo(id: artist.id)
+            (albums, info) = await (albumsLoad, infoLoad)
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 14) {
+            ArtworkView(coverArt: artist.coverArt, size: 84, cornerRadius: 42)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(artist.name).font(.title2).bold()
+                Button {
+                    app.startRadio(from: artist)
+                } label: {
+                    Label {
+                        Text("Artist Radio")
+                    } icon: {
+                        if app.isPreparingMix {
+                            ProgressView().controlSize(.mini)
+                        } else {
+                            Image(systemName: "dot.radiowaves.left.and.right")
+                        }
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(app.isPreparingMix)
+                .help("Play a mix of this artist and similar music")
+            }
+        }
+        .padding(.horizontal).padding(.top, 14)
+    }
+
+    @ViewBuilder private var bio: some View {
+        if let text = info?.plainBiography {
+            Text(text)
+                .font(.callout).foregroundStyle(.secondary)
+                .lineLimit(bioExpanded ? nil : 3)
+                .padding(.horizontal).padding(.top, 10)
+                .contentShape(Rectangle())
+                .onTapGesture { withAnimation { bioExpanded.toggle() } }
+                .help(bioExpanded ? "Click to collapse" : "Click to read the full bio")
+                .accessibilityAddTraits(.isButton)
+        }
+    }
+
+    @ViewBuilder private var similarArtists: some View {
+        if let similar = info?.similarArtist, !similar.isEmpty {
+            Divider().padding(.horizontal)
+            Shelf(title: "Similar Artists") {
+                ForEach(similar) { other in
+                    Button { navigator.openArtist(other) } label: {
+                        VStack(spacing: 6) {
+                            ArtworkView(coverArt: other.coverArt, size: 64, cornerRadius: 32)
+                            Text(other.name).font(.caption).lineLimit(1)
+                        }
+                        .frame(width: 90)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.bottom, 6)
+        }
     }
 }

@@ -3,6 +3,7 @@ import SwiftUI
 /// Grid of album artwork with infinite-scroll pagination. Selecting an album
 /// opens its track list. See docs/04-ui-ux.md.
 struct AlbumsView: View {
+    @Environment(AppModel.self) private var app
     @Environment(LibraryModel.self) private var library
     @Environment(Navigator.self) private var navigator
 
@@ -12,6 +13,13 @@ struct AlbumsView: View {
             // replaced by the custom now-playing bar.
             HStack {
                 Spacer()
+                Button { app.shuffleAlbums() } label: {
+                    Label("Shuffle", systemImage: "shuffle")
+                }
+                .buttonStyle(.borderless)
+                .fixedSize()
+                .disabled(app.isPreparingMix)
+                .help("Play random albums in full (uses the active filter)")
                 filterMenu
                 sortMenu
                     // Genre/year are list *types* server-side, so an active

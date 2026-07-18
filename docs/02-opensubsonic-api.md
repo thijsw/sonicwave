@@ -105,6 +105,16 @@ otherwise; see `SubsonicClient.formPostRequest`).
   endpoint; a fuller aggregation is a tracked deferral).
 - ~~`getSong`~~ — not needed so far (list payloads carry full song metadata).
 
+### Discovery (added 2026-07-18, M10)
+- `getArtistInfo2` — artist bio + similar artists (server metadata agent,
+  e.g. Navidrome's Last.fm bridge) for the artist page. Bio HTML is
+  flattened client-side (`ArtistInfo2Body.Info.plainBiography`).
+- `getSimilarSongs2` — the Start Radio mix; `id` may be a song or artist.
+  On Navidrome 0.62+ with the `sonicSimilarity` extension the server backs
+  this with audio analysis transparently — nothing to negotiate client-side.
+- `getTopSongs` — radio fallback for artists without similarity data.
+  Keys off the artist **name**, not id (Subsonic API quirk).
+
 ### Favorites / starred
 - `getStarred2` — starred artists/albums/songs.
 - `star` / `unstar` — toggle favorite by `id` (song/album/artist).

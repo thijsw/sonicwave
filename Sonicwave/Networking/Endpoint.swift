@@ -71,6 +71,34 @@ struct Endpoint: Sendable {
         ])
     }
 
+    // MARK: Discovery
+    /// Artist biography and similar artists (served from the server's
+    /// metadata agent, e.g. Navidrome's Last.fm bridge). Only artists present
+    /// in the library are returned (`includeNotPresent` defaults to false).
+    static func artistInfo2(id: String, count: Int) -> Endpoint {
+        Endpoint("getArtistInfo2", [
+            .init(name: "id", value: id),
+            .init(name: "count", value: String(count))
+        ])
+    }
+
+    /// Similar-song mix for Start Radio. `id` may be a song, album, or
+    /// artist id — the server mixes accordingly.
+    static func similarSongs2(id: String, count: Int) -> Endpoint {
+        Endpoint("getSimilarSongs2", [
+            .init(name: "id", value: id),
+            .init(name: "count", value: String(count))
+        ])
+    }
+
+    /// Top songs key off the artist *name*, not id (Subsonic API quirk).
+    static func topSongs(artist: String, count: Int) -> Endpoint {
+        Endpoint("getTopSongs", [
+            .init(name: "artist", value: artist),
+            .init(name: "count", value: String(count))
+        ])
+    }
+
     // MARK: Play queue
     /// Persist playback state server-side: the queue, the current song, and
     /// the playhead (ms). Survives relaunch and enables cross-device resume.

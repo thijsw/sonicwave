@@ -45,6 +45,80 @@ final class AppModel {
         }
     }
 
+    /// True while a radio mix or album shuffle is being assembled (the
+    /// fetches take a beat — similar songs, then per-album tracks). Entry
+    /// points disable on it, and the methods below bail re-entrantly, so an
+    /// impatient second click can't stack a second station on the first.
+    private(set) var isPreparingMix = false
+
+    /// Start Radio from a song: the seed plays first, followed by the
+    /// server's similar-songs mix (sonicSimilarity-backed on newer
+    /// Navidrome). Falls back to the artist's mix when the song itself has
+    /// no similarity data. Shuffle is switched off — a station's order is
+    /// the point, and shuffling would bury the seed.
+    func startRadio(from song: Song) {
+        guard !isPreparingMix else { return }
+        isPreparingMix = true
+        Task {
+            defer { isPreparingMix = false }
+            var mix = await library.similarSongs(id: song.id)
+            if mix.isEmpty, let artistId = song.artistId {
+                mix = await library.similarSongs(id: artistId)
+            }
+            if mix.isEmpty, let artistId = song.artistId {
+                mix = await artistShuffle(artistId: artistId)
+            }
+            mix.removeAll { $0.id == song.id }
+            player.shuffle = false
+            player.play(tracks: [song] + mix)
+        }
+    }
+
+    /// Artist radio: a similar-songs mix seeded by the artist, falling back
+    /// to the server's top songs, then to a shuffle of the artist's own
+    /// tracks — so the button always plays something, even on servers
+    /// without a metadata agent (e.g. the demo server).
+    func startRadio(from artist: Artist) {
+        guard !isPreparingMix else { return }
+        isPreparingMix = true
+        Task {
+            defer { isPreparingMix = false }
+            var mix = await library.similarSongs(id: artist.id)
+            if mix.isEmpty { mix = await library.topSongs(artist: artist.name) }
+            if mix.isEmpty { mix = await artistShuffle(artistId: artist.id) }
+            guard !mix.isEmpty else { return }
+            player.shuffle = false
+            player.play(tracks: mix)
+        }
+    }
+
+    /// Last-resort radio source: the artist's own tracks, shuffled (capped
+    /// at 10 albums to bound the fetch fan-out).
+    private func artistShuffle(artistId: String) async -> [Song] {
+        let albums = await library.albums(forArtist: artistId).shuffled().prefix(10)
+        var tracks: [Song] = []
+        for album in albums { tracks += await library.songs(forAlbum: album.id) }
+        return tracks.shuffled()
+    }
+
+    /// Controls → Shuffle Albums and the Albums-grid shuffle: whole albums
+    /// back-to-back in random order (the gapless-friendly shuffle), honoring
+    /// the grid's genre/decade filter. Shuffle mode is switched off so the
+    /// albums play through intact.
+    func shuffleAlbums() {
+        guard !isPreparingMix else { return }
+        isPreparingMix = true
+        Task {
+            defer { isPreparingMix = false }
+            let albums = await library.randomAlbums()
+            var tracks: [Song] = []
+            for album in albums { tracks += await library.songs(forAlbum: album.id) }
+            guard !tracks.isEmpty else { return }
+            player.shuffle = false
+            player.play(tracks: tracks)
+        }
+    }
+
     // Services (not observed directly by views).
     let credentials: CredentialStore
     let client: SubsonicClient

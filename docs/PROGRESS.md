@@ -50,6 +50,46 @@ xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
 
 ---
 
+## Fix: multi-song drags dropped into Up Next / playlists lost their order (2026-07-18)
+SwiftUI hands multi-item drop payloads over in no guaranteed order, and all
+three drop sites (Up Next `.onInsert`, empty-queue `.dropDestination`,
+sidebar-playlist `.dropDestination`) consumed them as-received. Fix: sort
+decoded `DraggedTrack`s by their `index` field (the source row index the
+drag already carried) before inserting — restoring the on-screen order the
+user grabbed. Human-reported after dragging an album's tracks to the queue.
+
+## M10 discovery batch: artist info, Start Radio, album shuffle (2026-07-18)
+Internet radio deliberately skipped (ICY-stream spike still open — `10`).
+- **API:** `getArtistInfo2`, `getSimilarSongs2`, `getTopSongs` endpoints +
+  bodies (`02` inventory updated). `getTopSongs` keys off artist *name*
+  (API quirk). Bio HTML flattened client-side
+  (`ArtistInfo2Body.Info.plainBiography` — drops the "Read more on Last.fm"
+  anchor, strips tags, decodes entities; covered by a decode test).
+- **Artist page:** header with circular portrait + Artist Radio button,
+  expandable 3-line bio, Similar Artists shelf (search-shelf idiom,
+  `navigator.openArtist`); artist-list rows get a Start Artist Radio
+  context item. Data loads concurrently with the album grid; servers
+  without a metadata agent simply hide bio/shelf (best-effort idiom).
+- **Start Radio:** track-table context menu (single selection) +
+  artist entry points. Chain: similar-by-song → similar-by-artist →
+  server top songs → shuffled own-artist tracks (≤10 albums), so radio
+  always plays on agent-less servers (the demo server exposed this).
+  Seed song plays first; shuffle mode is switched off so station order
+  holds.
+- **Busy guard:** `AppModel.isPreparingMix` — mix assembly takes a beat
+  (similar-songs then per-album fetches), so all radio/album-shuffle entry
+  points disable while one is in flight (Artist Radio button swaps its
+  icon for a spinner) and the methods bail re-entrantly.
+- **Shuffle Albums:** whole albums back-to-back in random order — Controls
+  menu + Albums-grid header button. Honors the genre/decade filter (server
+  `type=random` unfiltered; filters are list types with no random order,
+  so a 200-album filtered page is sampled client-side).
+- **Verified:** 105 tests green, zero warnings, SwiftLint clean. All three
+  endpoints live-checked against demo.navidrome.org (status ok, expected
+  shapes; demo has no Last.fm agent → empty payloads exercised the
+  fallback design). ✅ In-app flows (artist page, radio entry points,
+  album shuffle) human-verified against a real server 2026-07-18.
+
 ## Deployment target lowered to macOS 14 Sonoma (2026-07-18)
 `MACOSX_DEPLOYMENT_TARGET` 15.0 → 14.0 across all targets; README, docs
 (`00`/`07`/`10`), and the website updated to "macOS 14 Sonoma or later".

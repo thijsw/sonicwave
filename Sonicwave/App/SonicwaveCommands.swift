@@ -97,6 +97,11 @@ struct SonicwaveCommands: Commands {
 
             Button("Shuffle Library") { app.shuffleLibrary() }
                 .disabled(!app.connection.isConnected)
+
+            // Whole albums back-to-back in random order — the shuffle that
+            // keeps gapless albums intact.
+            Button("Shuffle Albums") { app.shuffleAlbums() }
+                .disabled(!app.connection.isConnected || app.isPreparingMix)
         }
     }
 

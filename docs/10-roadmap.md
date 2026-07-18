@@ -137,8 +137,12 @@ architecture without engine changes.
   lyrics track the playhead and seek on click on a real server; timer
   pauses cleanly mid-stream.
 
-### M10 — Discovery: artist info, instant mix, radio (M)
+### M10 — Discovery: artist info, instant mix, radio ✅ (except internet radio)
 Server-powered features; API + UI work only, no engine risk.
+**Status 2026-07-18:** artist info, Start Radio (with artist-shuffle
+fallback for agent-less servers) and album shuffle shipped and
+human-verified against a real server. Internet radio deferred by choice —
+the ICY spike below remains open.
 - **Artist metadata** (`getArtistInfo2`) — bio, artist image, similar-artist
   links on the artist detail page (currently just an album list) — `02`/`04`.
 - **Instant mix / artist radio** — `getSimilarSongs2` + `getTopSongs`;

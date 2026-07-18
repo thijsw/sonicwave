@@ -111,7 +111,9 @@ struct SidebarView: View {
             .listRowBackground(rowBackground(selected: selection == .playlist(id: playlist.id),
                                              dropTarget: dropTargetID == playlist.id))
             .dropDestination(for: DraggedTrack.self) { items, _ in
-                let ids = items.map(\.songId)
+                // Multi-item drops arrive in no guaranteed order — the
+                // source row index restores the on-screen order.
+                let ids = items.sorted { $0.index < $1.index }.map(\.songId)
                 guard !ids.isEmpty else { return false }
                 let pid = playlist.id
                 Task { await library.addToPlaylist(id: pid, songIds: ids) }

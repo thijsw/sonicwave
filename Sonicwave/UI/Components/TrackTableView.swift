@@ -24,6 +24,7 @@ struct TrackTableView: View {
     /// content (the album page passes this).
     var discHeaders: [Int: String]?
 
+    @Environment(AppModel.self) private var app
     @Environment(LibraryModel.self) private var library
     @Environment(PlayerModel.self) private var player
     @Environment(Navigator.self) private var navigator
@@ -128,6 +129,9 @@ struct TrackTableView: View {
 
     private func addSingleSongItems(to menu: NSMenu, song: Song) {
         menu.addItem(.separator())
+        menu.addItem(ClosureMenuItem(title: "Start Radio", enabled: !app.isPreparingMix) {
+            app.startRadio(from: song)
+        })
         menu.addItem(ClosureMenuItem(title: "Get Info") { infoSong = song })
         if let albumId = song.albumId {
             menu.addItem(ClosureMenuItem(title: "Go to Album") {
