@@ -7,6 +7,19 @@ struct AlbumsView: View {
     @Environment(LibraryModel.self) private var library
     @Environment(Navigator.self) private var navigator
 
+    /// Persisted (not @State): opening an album replaces this whole view in
+    /// the detail column, so the grid's scroll position must live outside
+    /// the view for Back to land on the same spot. Tracks the top-visible
+    /// album id; cleared on filter/sort changes (a new ordering starts at
+    /// the top). A saved id missing after relaunch (deep pagination) is a
+    /// harmless no-op.
+    @AppStorage("albumsScrollID") private var storedScrollID = ""
+
+    private var scrollPositionBinding: Binding<Album.ID?> {
+        Binding(get: { storedScrollID.isEmpty ? nil : storedScrollID },
+                set: { storedScrollID = $0 ?? "" })
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Sort lives in the view's own header now that the window toolbar is
@@ -51,6 +64,7 @@ struct AlbumsView: View {
                     ProgressView().padding()
                 }
             }
+            .scrollPosition(id: scrollPositionBinding, anchor: .top)
         }
         .navigationTitle("Albums")
         .task {
@@ -88,7 +102,10 @@ struct AlbumsView: View {
     private var filterBinding: Binding<LibraryModel.AlbumFilter> {
         Binding(
             get: { library.albumFilter },
-            set: { filter in Task { await library.changeAlbumFilter(to: filter) } }
+            set: { filter in
+                storedScrollID = ""
+                Task { await library.changeAlbumFilter(to: filter) }
+            }
         )
     }
 
@@ -104,7 +121,10 @@ struct AlbumsView: View {
         Menu {
             Picker("Sort By", selection: Binding(
                 get: { library.albumSortType },
-                set: { type in Task { await library.changeAlbumSort(to: type) } }
+                set: { type in
+                    storedScrollID = ""
+                    Task { await library.changeAlbumSort(to: type) }
+                }
             )) {
                 Text("Recently Added").tag("newest")
                 Text("Recently Played").tag("recent")

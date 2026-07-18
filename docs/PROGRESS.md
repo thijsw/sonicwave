@@ -50,6 +50,15 @@ xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
 
 ---
 
+## Albums grid scroll position survives Back (2026-07-18)
+The top-visible album id is tracked via `scrollPosition(id:)` (macOS 14
+API) against the grid's new `scrollTargetLayout()`, persisted in
+`@AppStorage("albumsScrollID")` — same reasoning as the artists selection:
+the view is torn down while an album is open, so scroll must live outside
+it. Cleared on filter/sort changes (new orderings start at top); a saved
+id missing after relaunch (deep pagination) no-ops harmlessly. Home and
+artist-detail scroll remain tracked-deferred in `10`.
+
 ## Bug-hunt batch: teardown, ordering, and async-race audit (2026-07-18)
 Three-way audit prompted by the artist-selection and drag-order bugs
 (same-family hunt). Ten fixes, all covered by the suite (107 green):

@@ -188,9 +188,10 @@ this is where the direct macOS competitors (EKO, Supersonic) compete.
   state matches reality in all combinations.
 
 ### Tracked, unscheduled (revisit on demand)
-- **SwiftUI scroll-position persistence** for the Albums grid, Home, and
-  artist detail — they reset to top when an album opens over them (the
-  `scrollAutosaveKey` mechanism is AppKit-table-only). S–M.
+- **SwiftUI scroll-position persistence** for Home and artist detail —
+  they reset to top when an album opens over them (the `scrollAutosaveKey`
+  mechanism is AppKit-table-only). Albums grid shipped 2026-07-18 via
+  `scrollPosition(id:)` — reuse that pattern. S.
 - **Cache genre songs / playlist detail in LibraryModel** so Back doesn't
   refetch with a spinner flash. S.
 - **Public share links** (`createShare`) — "Copy Share Link" context

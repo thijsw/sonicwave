@@ -20,6 +20,9 @@ struct AlignedAdaptiveGrid<Content: View>: View {
                   spacing: spacing) {
             content()
         }
+        // Marks the grid's children as scroll targets so an enclosing
+        // ScrollView can track/restore position by id (Albums grid).
+        .scrollTargetLayout()
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.width
         } action: { width in
