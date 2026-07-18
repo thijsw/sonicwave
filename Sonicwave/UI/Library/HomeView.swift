@@ -8,6 +8,22 @@ import SwiftUI
 struct HomeView: View {
     @Environment(LibraryModel.self) private var library
 
+    /// Persisted (not @State): opening an album replaces this whole view in
+    /// the detail column, so scroll must live outside it for Back to land on
+    /// the same spot. Section-level granularity — the shelves are the scroll
+    /// targets; the greeting (top) reads as nil so the top stays the top.
+    @AppStorage("homeScrollID") private var storedScrollID = ""
+
+    private var scrollPositionBinding: Binding<String?> {
+        Binding(
+            get: {
+                (storedScrollID.isEmpty || storedScrollID == "greeting")
+                    ? nil : storedScrollID
+            },
+            set: { storedScrollID = $0 ?? "" }
+        )
+    }
+
     private var allEmpty: Bool {
         library.homeNewest.isEmpty && library.homeRecent.isEmpty
             && library.homeFrequent.isEmpty && library.homeRandom.isEmpty
@@ -26,24 +42,32 @@ struct HomeView: View {
                         Text(greeting)
                             .font(.system(size: 28, weight: .bold))
                             .padding(.horizontal, 20)
+                            .id("greeting")
 
                         if let hero = library.homeRecent.first {
                             HomeHeroCard(album: hero)
                                 .padding(.horizontal, 20)
+                                .id("hero")
                         }
 
                         // The hero already features the most recent album, so
                         // its shelf continues from the second entry.
                         shelf("Keep Listening", Array(library.homeRecent.dropFirst()))
+                            .id("keepListening")
                         shelf("Recently Added", library.homeNewest, tile: 150)
+                            .id("recentlyAdded")
                         shelf("Most Played", library.homeFrequent)
+                            .id("mostPlayed")
                         if !library.homeRandom.isEmpty {
                             AlbumShelf(title: "Random", albums: library.homeRandom,
                                        accessory: AnyView(rerollButton))
+                                .id("random")
                         }
                     }
                     .padding(.vertical, 20)
+                    .scrollTargetLayout()
                 }
+                .scrollPosition(id: scrollPositionBinding, anchor: .top)
             }
         }
         .navigationTitle("Home")

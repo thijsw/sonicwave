@@ -50,14 +50,20 @@ xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
 
 ---
 
-## Albums grid scroll position survives Back (2026-07-18)
-The top-visible album id is tracked via `scrollPosition(id:)` (macOS 14
-API) against the grid's new `scrollTargetLayout()`, persisted in
-`@AppStorage("albumsScrollID")` — same reasoning as the artists selection:
-the view is torn down while an album is open, so scroll must live outside
-it. Cleared on filter/sort changes (new orderings start at top); a saved
-id missing after relaunch (deep pagination) no-ops harmlessly. Home and
-artist-detail scroll remain tracked-deferred in `10`.
+## Albums grid, Home, and artist-detail scroll survive Back (2026-07-18)
+All three SwiftUI scroll surfaces now persist position via
+`scrollPosition(id:)` (macOS 14 API) + `scrollTargetLayout()`, stored in
+`@AppStorage` — same reasoning as the artists selection: the views are
+torn down while an album is open, so scroll must live outside them.
+- **Albums grid** — top-visible album id (`albumsScrollID`); cleared on
+  filter/sort changes; a missing id (deep pagination after relaunch)
+  no-ops harmlessly.
+- **Home** — section-level ids on the shelves (`homeScrollID`); the
+  greeting reads as nil so the top stays the top.
+- **Artist detail** — composite `artistID|albumID`
+  (`artistDetailScroll`): per-artist, so switching artists starts at the
+  top; the first album reads as nil (it's what tracking reports while the
+  header is visible — restoring to it would scroll the header off).
 
 ## Bug-hunt batch: teardown, ordering, and async-race audit (2026-07-18)
 Three-way audit prompted by the artist-selection and drag-order bugs

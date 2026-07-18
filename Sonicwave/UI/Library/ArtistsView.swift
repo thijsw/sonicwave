@@ -88,6 +88,25 @@ struct ArtistDetailView: View {
 
     private var bioExpanded: Bool { bioExpandedID == artist.id }
 
+    /// Scroll memory as "artistID|albumID": per-artist, so another artist's
+    /// saved position reads as nil (switching artists starts at the top, and
+    /// only Back-from-an-album restores). The first album also reads as nil —
+    /// it's the id reported when the header is visible, and restoring to it
+    /// would scroll the header off.
+    @AppStorage("artistDetailScroll") private var storedScroll = ""
+
+    private var scrollPositionBinding: Binding<Album.ID?> {
+        Binding(
+            get: {
+                let parts = storedScroll.split(separator: "|", maxSplits: 1).map(String.init)
+                guard parts.count == 2, parts[0] == artist.id,
+                      parts[1] != albums.first?.id else { return nil }
+                return parts[1]
+            },
+            set: { id in storedScroll = id.map { "\(artist.id)|\($0)" } ?? "" }
+        )
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
@@ -108,6 +127,7 @@ struct ArtistDetailView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .scrollPosition(id: scrollPositionBinding, anchor: .top)
         .task(id: artist.id) {
             async let albumsLoad = library.albums(forArtist: artist.id)
             async let infoLoad = library.artistInfo(id: artist.id)
