@@ -8,7 +8,7 @@ The interaction design iTunes got right — a dense sortable track list, a
 column browser, Up Next, fast search — rebuilt as a modern, restrained
 Mac app. Streaming-only, audiophile-grade playback, no Electron in sight.
 
-![Platform](https://img.shields.io/badge/platform-macOS%2015%2B-blue)
+![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)
 ![Swift](https://img.shields.io/badge/Swift-6.2-orange)
 ![Frameworks](https://img.shields.io/badge/dependencies-Apple%20frameworks%20only-green)
 ![Server](https://img.shields.io/badge/server-OpenSubsonic%20%2F%20Navidrome-8A2BE2)
@@ -27,67 +27,28 @@ library ([Navidrome](https://www.navidrome.org/) is the reference server).
 It's for people who run their own music server and want a real Mac app —
 keyboard-friendly, low-footprint, native — instead of a browser tab.
 
-## Download
+## Features
 
-Grab `Sonicwave-x.y.z.zip` from the
-[latest release](https://github.com/thijsw/sonicwave/releases/latest), unzip,
-and drop `Sonicwave.app` into `/Applications`. Builds are signed and
-**notarized by Apple** — they launch without Gatekeeper warnings.
-
-**First launch:** open **Settings → Connection** (⌘,), enter your server
-address and credentials, hit **Test Connection** → **Save & Connect**.
-Credentials go straight to the Keychain; your password never travels in a
-URL, and plain-HTTP servers on your local network work fine.
-No server yet? Click **Use Demo Server** to try Sonicwave against the public
-Navidrome demo.
-
-## Highlights
-
-**🎧 Serious about audio**
-- **True gapless playback** — album transitions are seamless by construction.
-- **Hardware sample-rate matching** (Audirvana/Roon-style, on by default):
-  your DAC runs at each track's native rate, nothing gets resampled.
-- **Streaming decode** of MP3, FLAC, AAC, WAV, AIFF and more — playback
-  starts fast and memory stays flat. Formats macOS can't decode (Ogg
-  Vorbis, …) fall back to server transcoding automatically.
-- **ReplayGain volume normalization** (by track or by album), applied
-  losslessly in the engine with peak protection.
-- **Robust output routing**: pick any output device — AirPlay routes
-  included — and unplugging or replugging a USB DAC mid-track recovers
-  automatically. Your system-default device is never touched.
-
-**📚 A library you can drive**
-- A **Home page** to land on: Jump Back In, Keep Listening, Recently Added,
-  Most Played, and a Random shelf with a re-roll button.
-- Dense, sortable track table: double-click or ⏎ to play, ⌥-double-click to
-  queue next, multi-select, drag to playlists. Multi-disc albums get
-  disc headers.
-- Column browser (Genre → Artist → Album), global search (⌘F), quality
-  badges ("FLAC", "320 kbps") with lossless-first sorting. Filter the
-  Albums grid by genre or decade, **Shuffle Library** for a fresh
-  500-song mix, or **Shuffle Albums** for whole albums back-to-back in
-  random order (filter-aware, gapless intact).
-- **Start Radio** from any song or artist: a similar-songs mix via your
-  server's metadata agent (Last.fm or Navidrome's sonic analysis), with
-  graceful fallbacks when it has none.
-- **Artist pages** with portrait, expandable bio, an Artist Radio button,
-  and a Similar Artists shelf.
-- Server playlists round-trip fully: create, rename, reorder, delete.
-- Favorites everywhere, with a ★ column.
-- **Scrobbling** (on by default) feeds your server's play counts and
-  Last.fm-style history; kick off a **server library scan** right from the
-  app (File → Update Server Library).
-
-**🖥 A proper Mac citizen**
-- iTunes-style "LCD" in the toolbar; a resizable Now Playing panel with a
-  reorderable Up Next queue; a menu-bar player that works with the window
-  closed. Click the panel's artwork to Quick Look the cover at full
-  resolution.
-- Media keys, Control Center / Now Playing widget, live artwork.
-- **Your queue survives relaunches** — saved server-side (with the
-  playhead), so other clients can resume the same session.
-- Light/Dark, full keyboard shortcuts, VoiceOver support, state restoration,
-  sandboxed with a single entitlement (outgoing network).
+- True gapless playback; streaming decode of FLAC, MP3, AAC, WAV, AIFF —
+  with automatic server-transcode fallback for anything else
+- Hardware sample-rate matching (on by default) — your DAC runs at each
+  track's native rate
+- ReplayGain volume normalization (track/album) with peak protection
+- Output-device picker incl. AirPlay routes; USB-DAC unplug/replug recovery
+- Dense sortable track table, column browser (Genre → Artist → Album),
+  global search, quality badges with lossless-first sorting
+- Home page shelves; artist pages with bio and similar artists
+- Start Radio from any song or artist (server similarity, with fallbacks)
+- Shuffle Library (500-song mix) and Shuffle Albums (whole albums,
+  filter-aware); album grid filters by genre/decade
+- Server playlists with full round-trip editing; favorites everywhere
+- Scrobbling; trigger a server library scan from the app
+- Queue saved server-side with the playhead — survives relaunches,
+  resumable from other clients
+- Menu-bar player, media keys, Control Center widget, iTunes-style LCD
+- Light/Dark, keyboard-first, VoiceOver, state restoration; sandboxed with
+  a single (network) entitlement
+- One-click demo server to try it without a server of your own
 
 ## Requirements
 
