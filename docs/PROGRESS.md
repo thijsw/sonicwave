@@ -50,6 +50,20 @@ xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
 
 ---
 
+## Post-v1 roadmap from ecosystem gap analysis (2026-07-18)
+Surveyed ~35 Subsonic/OpenSubsonic clients (Feishin, Supersonic, Symfonium,
+play:Sub, Amperfy, EKO, NaviBeat, …) and mapped Sonicwave against them.
+Already ahead of the field: `savePlayQueue` cross-device sync (almost
+unclaimed ecosystem-wide), hardware rate matching, streaming gapless.
+Added M9–M11 to `10-roadmap.md`: M9 ratings (`setRating`) + synced lyrics
+(`getLyricsBySongId`) + sleep timer (all S) · M10 discovery —
+`getArtistInfo2` bios, instant mix (`getSimilarSongs2`), album shuffle,
+internet radio gated behind an ICY-stream spike (M) · M11 audiophile batch —
+optional EQ, signal-path integrity indicator, hog mode, playbackReport (L).
+Crossfade explicitly deferred (single-node gapless scheduling has no overlap
+path). Offline caching flagged as the first `00` non-goal to revisit
+post-MAS. Docs only — no code changes.
+
 ## v0.4.0 released (2026-07-17)
 Build 7, notarized/stapled/Gatekeeper-accepted, hand-written notes. Ships
 the FLAC streaming fix (headline), transcode fallback, album filters,

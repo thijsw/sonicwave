@@ -107,6 +107,96 @@ playback first (M3).
   `AVSampleBufferAudioRenderer` + `AVRoutePickerView` — a parallel render
   path beside the `AVAudioEngine` pipeline; significant rework.
 
+## Post-v1 feature milestones — ecosystem gap analysis (2026-07-17)
+
+From a survey of ~35 Subsonic/OpenSubsonic clients (desktop, web, mobile).
+Where Sonicwave already leads: cross-device queue sync via `savePlayQueue`
+(almost unclaimed ecosystem-wide), hardware sample-rate matching, true
+streaming gapless. The gaps below are ordered by how hard the ecosystem
+pressures them vs implementation cost. Sizes: S ≈ days, M ≈ a week-plus,
+L ≈ engine-level rework.
+
+### M9 — Ratings, synced lyrics, sleep timer (S/S/S)
+The three most conspicuous table-stakes gaps; all fit the current
+architecture without engine changes.
+- **5-star ratings** (`setRating`) — we sync favorites only; nearly every
+  maintained client syncs both, and Navidrome tracks them separately. New
+  rating column beside ★ in `MusicTrackTable`, control in Get Info +
+  context menu — `02`/`04`.
+- **Synced lyrics** — the signature feature of every 2025–2026 client.
+  OpenSubsonic `getLyricsBySongId` (songLyrics extension; capability
+  detection already in place via `getOpenSubsonicExtensions`), legacy
+  `getLyrics` fallback for unsynced. Lyrics view in the Now Playing panel,
+  line highlight driven by the existing throttled position stream,
+  click-a-line-to-seek. Word-level timing (songLyrics v2, Navidrome 0.63)
+  is a later polish pass — `02`/`04`.
+- **Sleep timer** — Controls menu + menu-bar panel; pause at end of timer
+  or end of current track. Trivial; ubiquitous elsewhere.
+- **Exit:** ratings round-trip vs Navidrome and sort correctly; synced
+  lyrics track the playhead and seek on click on a real server; timer
+  pauses cleanly mid-stream.
+
+### M10 — Discovery: artist info, instant mix, radio (M)
+Server-powered features; API + UI work only, no engine risk.
+- **Artist metadata** (`getArtistInfo2`) — bio, artist image, similar-artist
+  links on the artist detail page (currently just an album list) — `02`/`04`.
+- **Instant mix / artist radio** — `getSimilarSongs2` + `getTopSongs`;
+  "Start Radio" from song/artist context menus feeding the existing queue.
+  Detect and prefer the `sonicSimilarity` extension (Navidrome 0.62,
+  audio-analysis-based) when the server offers it — `02`.
+- **Richer shuffle** — Shuffle by Albums (whole albums in random order, via
+  `getAlbumList2 type=random`) alongside the existing 500-song Shuffle
+  Library; genre/decade-filtered shuffle reuses the Albums filter model —
+  `04`.
+- **Internet radio stations** (`getInternetRadioStations`) — sidebar
+  section. ⚠️ Engine caveat: ICY streams are endless and unseekable, which
+  breaks the progressive pipeline's known-length assumptions; needs a spike
+  (likely a separate lightweight `AVPlayer`-style path or a stream-source
+  variant) before committing — `03`. If the spike is ugly, ship M10 without
+  it.
+- **Exit:** artist pages show bio + similar artists; Start Radio fills the
+  queue with plausible picks vs a real server; album shuffle queues full
+  albums.
+
+### M11 — Audiophile engine batch: EQ, signal-path indicator, hog mode (L)
+Aligned with the app's identity (rate matching, gapless, quality badges);
+this is where the direct macOS competitors (EKO, Supersonic) compete.
+- **Optional graphic EQ** — `AVAudioUnitEQ` (10-band) inserted in the
+  engine graph; per-preset storage. Stretch: AutoEQ headphone-profile
+  import (plain-text profiles, no dependency) — `03`.
+- **Signal-path integrity indicator** — surfaced in Now Playing/Get Info:
+  "bit-perfect" state lights only when EQ/ReplayGain/volume leave the
+  stream untouched and the device rate matches. Resolves the EQ-vs-purity
+  tension explicitly; we already have most of the state — `03`/`04`.
+- **Exclusive / hog-mode output** (already a tracked deferral) —
+  `kAudioDevicePropertyHogMode` + mixability off while playing; completes
+  the bit-perfect story next to rate matching — `03`.
+- **playbackReport extension** — richer playback telemetry next to the
+  existing scrobbler; cheap, and Navidrome 0.62's Now Playing uses it —
+  `02`.
+- **Crossfade — explicitly deferred**, not in M11: the single-node
+  back-to-back scheduling that makes gapless work leaves no second node to
+  overlap into; it's a dual-node/dual-chain rework with route-recovery
+  implications (`03`). Revisit only on demand.
+- **Exit:** EQ audibly works and bypasses losslessly when flat/off; hog
+  mode verified vs the USB DAC incl. route-change recovery; indicator
+  state matches reality in all combinations.
+
+### Tracked, unscheduled (revisit on demand)
+- **Public share links** (`createShare`) — "Copy Share Link" context
+  action; Navidrome supports it, few clients expose it. S.
+- **Bookmarks + playback speed** (`getBookmarks`/`createBookmark`) — the
+  audiobook/long-mix story; near-absent on desktop. S–M.
+- **Folder browsing** (`getIndexes`/`getMusicDirectory`) — tag-only today;
+  matters for messy-tag libraries. M.
+- **Waveform seekbar** — distinctive but needs whole-file peak data the
+  streaming pipeline doesn't naturally have. M–L.
+- **Jukebox mode** (`jukeboxControl`) — rare on desktop (Feishin just
+  added it). M.
+- **Offline caching** stays a `00` non-goal but is table stakes on every
+  maintained mobile client and marked ⏳ there — first non-goal to revisit
+  post-MAS. Smart playlists / multi-server / podcasts remain safe skips.
+
 ## Risk register
 
 | Risk | Milestone | Mitigation |
