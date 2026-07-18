@@ -7,7 +7,11 @@ struct ArtistsView: View {
     @Environment(AppModel.self) private var app
     @Environment(LibraryModel.self) private var library
     @Environment(Navigator.self) private var navigator
-    @State private var selectedID: Artist.ID?
+    /// Persisted, not @State: opening an album replaces this whole view in
+    /// the detail column (RootView), so view state dies while browsing an
+    /// album — Back must land on the same artist. Doubles as cross-launch
+    /// restoration (the app-wide @AppStorage pattern, docs/06).
+    @AppStorage("artistsSelectedID") private var selectedID: Artist.ID?
 
     private var selected: Artist? {
         library.artists.first { $0.id == selectedID } ?? library.artists.first

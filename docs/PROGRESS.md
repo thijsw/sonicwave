@@ -50,6 +50,14 @@ xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
 
 ---
 
+## Fix: Back from an album reset the Artists selection (2026-07-18)
+Opening an album replaces the whole section view in the detail column
+(`RootView`'s `if let album` swap), so `ArtistsView`'s `@State selectedID`
+died while browsing the album and Back landed on the first artist.
+Selection now lives in `@AppStorage("artistsSelectedID")` — same app-wide
+restoration pattern as sort/scroll (`06`) — which fixes Back and restores
+the selected artist across relaunches for free.
+
 ## v0.5.0 released (2026-07-18)
 Build 8, notarized/stapled/Gatekeeper-accepted, hand-written notes. Ships
 M10 discovery (Start Radio, artist pages, Shuffle Albums), the macOS 14
