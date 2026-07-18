@@ -31,10 +31,13 @@ struct FlacStreamingTests {
             AVSampleRateKey: sampleRate,
             AVNumberOfChannelsKey: 2
         ]
-        let file = try AVAudioFile(forWriting: url, settings: settings, commonFormat: .pcmFormatFloat32,
-                                   interleaved: false)
-        try file.write(from: sine)
-        file.close() // flush the header
+        // Scoped so the AVAudioFile deinits (flushing the header) before we
+        // read the bytes back — close() needs macOS 15, the target is 14.
+        do {
+            let file = try AVAudioFile(forWriting: url, settings: settings, commonFormat: .pcmFormatFloat32,
+                                       interleaved: false)
+            try file.write(from: sine)
+        }
         let data = try Data(contentsOf: url)
         return (data, AVAudioFramePosition(frames))
     }

@@ -1,5 +1,7 @@
 import Testing
-import MediaPlayer
+// preconcurrency: MPMediaItemArtwork's Sendable conformance is gated to
+// macOS 15 in the SDK; the deployment target is 14.
+@preconcurrency import MediaPlayer
 import AppKit
 @testable import Sonicwave
 

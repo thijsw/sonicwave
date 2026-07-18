@@ -28,7 +28,7 @@ appearance:
 ## Target user
 
 A technical music listener running their own OpenSubsonic/Navidrome server,
-on macOS 15+, who wants a native, keyboard-friendly, low-footprint desktop
+on macOS 14+, who wants a native, keyboard-friendly, low-footprint desktop
 client rather than a web UI or an Electron app.
 
 ## In scope (v1)
@@ -93,7 +93,7 @@ acceptance checklist.
 
 | PROMPT.md area | Requirement | Covered in |
 | --- | --- | --- |
-| Platform & language | SwiftUI, macOS 15 min, Xcode 26 SDK, Liquid Glass auto-adopt, availability guards | 01, 04 |
+| Platform & language | SwiftUI, macOS 14 min, Xcode 26 SDK, Liquid Glass auto-adopt, availability guards | 01, 04 |
 | Platform & language | First-party frameworks (NavigationSplitView, Table, MenuBarExtra, AVAudioEngine, MediaPlayer, Keychain, URLSession, SwiftData) | 01–06 |
 | Platform & language | External deps only if permissive + unavoidable | 01 |
 | Distribution | Mac App Store, App Sandbox, minimal entitlements | 07 |

@@ -85,7 +85,7 @@ Navidrome demo.
 
 ## Requirements
 
-- **macOS 15 Sequoia** or later
+- **macOS 14 Sonoma** or later
 - An **OpenSubsonic-compatible server** (Navidrome, Gonic, LMS, Astiga, …)
 
 ## Status

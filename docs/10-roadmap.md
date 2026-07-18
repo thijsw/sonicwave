@@ -19,10 +19,11 @@ playback first (M3).
 > Tier 1. See `PROGRESS.md` for the detailed build log.
 
 ## M0 — Foundation ✅
-- Create the Xcode app project (macOS 15 deployment, Swift 6 language mode,
-  Xcode 26 SDK), folder groups per `01`, unit-test + UI-test targets.
+- Create the Xcode app project (macOS 14 deployment — 15 at M0, lowered
+  2026-07-18; Swift 6 language mode, Xcode 26 SDK), folder groups per `01`,
+  unit-test + UI-test targets.
 - App Sandbox + `network.client` entitlement; Hardened Runtime; Info.plist
-  (min macOS 15, music category, versioning, icon placeholder) — `07`.
+  (min macOS 14, music category, versioning, icon placeholder) — `07`.
 - Settings scene skeleton + Keychain credential store (shipped as
   `CredentialStore`) — `02`/`07`.
 - App scenes wired: `WindowGroup`, `Settings`, `MenuBarExtra` (empty), shared

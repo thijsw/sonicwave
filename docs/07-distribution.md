@@ -28,7 +28,7 @@ fallback is also possible.
 
 - Bundle identifier, app category (Music), and app icon set.
 - `Info.plist`: app name "Sonicwave", versioning (`CFBundleShortVersionString`
-  + build), minimum system version (macOS 15.0), `LSApplicationCategoryType`
+  + build), minimum system version (macOS 14.0), `LSApplicationCategoryType`
   = `public.app-category.music`.
 - **Privacy:** the app sends credentials and stream requests only to the
   user-configured server. Provide an accurate App Privacy disclosure
@@ -89,7 +89,7 @@ needed (playback, Keychain, networking all work in the exported app).
 - [x] Hardened Runtime on (Release); no exceptions needed — exported app
       plays audio and reads the Keychain.
 - [x] Credentials in Keychain; nothing sensitive logged.
-- [x] Info.plist: min macOS 15, music category, versioning, icon (placeholder
+- [x] Info.plist: min macOS 14, music category, versioning, icon (placeholder
       icon still to be replaced before submission).
 - [x] No Tahoe-only API without `#available` guard (none used).
 - [ ] App Privacy details accurate (no tracking/analytics v1) — fill in at

@@ -180,9 +180,12 @@ struct DecodeContinuityTests {
             AVSampleRateKey: sampleRate,
             AVNumberOfChannelsKey: 2
         ]
-        let file = try AVAudioFile(forWriting: url, settings: settings)
-        try file.write(from: sine)
-        file.close() // flush the moov atom
+        // Scoped so the AVAudioFile deinits (flushing the moov atom) before
+        // we read the bytes back — close() needs macOS 15, the target is 14.
+        do {
+            let file = try AVAudioFile(forWriting: url, settings: settings)
+            try file.write(from: sine)
+        }
         let m4a = try Data(contentsOf: url)
         #expect(m4a.count > 1000)
 
@@ -239,7 +242,9 @@ struct DecodeContinuityTests {
         // fully (a single convert() call caps output at ~4096 frames).
         let canonical = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2)!
         let conv = try #require(AVAudioConverter(from: beFormat, to: canonical))
-        var provided = false
+        // convert() calls the input block synchronously on this thread; the
+        // 14.0-target SDK marks the block @Sendable, so opt the flag out.
+        nonisolated(unsafe) var provided = false
         var out: [Float] = []
         while true {
             let pcm = try #require(AVAudioPCMBuffer(pcmFormat: canonical, frameCapacity: 8192))

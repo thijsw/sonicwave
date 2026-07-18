@@ -50,6 +50,29 @@ xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
 
 ---
 
+## Deployment target lowered to macOS 14 Sonoma (2026-07-18)
+`MACOSX_DEPLOYMENT_TARGET` 15.0 → 14.0 across all targets; README, docs
+(`00`/`07`/`10`), and the website updated to "macOS 14 Sonoma or later".
+Verified empirically before changing: the **app target** compiles at 14.0
+with zero errors/warnings — every API in use (incl. `@Observable`,
+`MenuBarExtra .window`, the AppKit table) exists on Sonoma. macOS 13 is not
+feasible without a rewrite: `@Observable`/Observation requires macOS 14 and
+the whole state layer is built on it. Gains the Sonoma-holdout user base
+plus 2018–2019 MacBook Air hardware that macOS 15 dropped.
+- **Test target needed 3 small fixes:** `AVAudioFile.close()` is 15-only —
+  replaced with a `do`-scope so deinit flushes the header (FlacStreaming,
+  DecodeContinuity); `MPMediaItemArtwork`'s Sendable conformance is gated
+  to 15 → `@preconcurrency import MediaPlayer` (NowPlayingCenterTests);
+  the 14.0 SDK surface marks `AVAudioConverter`'s input block `@Sendable` →
+  `nonisolated(unsafe)` on a test-local flag (block runs synchronously).
+  Full suite green at 14.0; SwiftLint clean.
+- ⏳ **Runtime verification on a real Sonoma machine/VM pending** (dev
+  machine runs macOS 15; SwiftUI behavior can differ subtly — menu-bar
+  panel, split view, route-change recovery are the spots to eyeball).
+  Do this before advertising 14+ in a release or the MAS listing.
+- Future 15-only APIs now need `#available(macOS 15, *)` guards (same
+  pattern already planned for Tahoe APIs).
+
 ## Post-v1 roadmap from ecosystem gap analysis (2026-07-18)
 Surveyed ~35 Subsonic/OpenSubsonic clients (Feishin, Supersonic, Symfonium,
 play:Sub, Amperfy, EKO, NaviBeat, …) and mapped Sonicwave against them.
