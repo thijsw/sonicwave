@@ -66,10 +66,12 @@ plus 2018–2019 MacBook Air hardware that macOS 15 dropped.
   the 14.0 SDK surface marks `AVAudioConverter`'s input block `@Sendable` →
   `nonisolated(unsafe)` on a test-local flag (block runs synchronously).
   Full suite green at 14.0; SwiftLint clean.
-- ⏳ **Runtime verification on a real Sonoma machine/VM pending** (dev
-  machine runs macOS 15; SwiftUI behavior can differ subtly — menu-bar
-  panel, split view, route-change recovery are the spots to eyeball).
-  Do this before advertising 14+ in a release or the MAS listing.
+- **Sonoma runtime verification: consciously skipped** (2026-07-18). Dev
+  machine runs macOS 15; a VM/dual-boot pass was judged not worth the
+  hassle. Support for 14 is compile-verified only — accepted risk that
+  SwiftUI behavior may differ subtly (menu-bar panel, split view). If a
+  Sonoma user reports breakage, that's the first place to look; revisit
+  with a VM then.
 - Future 15-only APIs now need `#available(macOS 15, *)` guards (same
   pattern already planned for Tahoe APIs).
 
