@@ -48,6 +48,7 @@ final class LibraryModel {
     private(set) var homeFrequent: [Album] = []
     private(set) var homeRandom: [Album] = []
     private(set) var homeLoaded = false
+    private var homeLoading = false
 
     // Internal setter (not private): playlist CRUD lives in
     // LibraryModel+Playlists.swift.
@@ -73,6 +74,7 @@ final class LibraryModel {
         genres = []
         starredSongs = []
         starredAlbums = []
+        starredLoaded = false
         homeNewest = []
         homeRecent = []
         homeFrequent = []
@@ -147,6 +149,7 @@ final class LibraryModel {
 
     func loadArtistsIfNeeded() async {
         guard artists.isEmpty else { return }
+        if case .loading = artistsState { return }
         artistsState = .loading
         do {
             let body = try await client.send(.artists, as: ArtistsBody.self)
@@ -182,8 +185,13 @@ final class LibraryModel {
 
     // MARK: - Genres
 
+    private var genresLoading = false
+
     func loadGenresIfNeeded() async {
-        guard genres.isEmpty else { return }
+        // Albums and the column browser can both request genres at once.
+        guard genres.isEmpty, !genresLoading else { return }
+        genresLoading = true
+        defer { genresLoading = false }
         do {
             let body = try await client.send(.genres, as: GenresBody.self)
             genres = (body.genres.genre ?? [])
@@ -195,9 +203,17 @@ final class LibraryModel {
 
     // MARK: - Favorites
 
+    private var starredLoaded = false
+    private var starredLoading = false
+
     func loadStarredIfNeeded() async {
-        guard starredSongs.isEmpty, starredAlbums.isEmpty else { return }
+        // `starredLoaded` (not emptiness): a user with zero favorites would
+        // otherwise refetch on every appearance; the in-flight flag stops
+        // Favorites + an album detail from firing duplicate fetches.
+        guard !starredLoaded, !starredLoading else { return }
+        starredLoading = true
         await reloadStarred()
+        starredLoading = false
     }
 
     func reloadStarred() async {
@@ -205,6 +221,7 @@ final class LibraryModel {
             let body = try await client.send(.starred2, as: Starred2Body.self)
             starredAlbums = body.starred2.album ?? []
             starredSongs = body.starred2.song ?? []
+            starredLoaded = true
         } catch {
             // leave existing values; surfaced via UI empty state
         }
@@ -239,17 +256,26 @@ final class LibraryModel {
 
     // MARK: - Favorite toggling
 
-    func setStarred(_ starred: Bool, songId: String) async {
+    @discardableResult
+    func setStarred(_ starred: Bool, songId: String) async -> Bool {
         await setStarred(starred, songIds: [songId])
     }
 
     /// Star/unstar several songs, reloading favorites once at the end.
-    func setStarred(_ starred: Bool, songIds: [String]) async {
-        guard !songIds.isEmpty else { return }
+    /// Returns false when any write failed, so optimistic UI can roll back.
+    @discardableResult
+    func setStarred(_ starred: Bool, songIds: [String]) async -> Bool {
+        guard !songIds.isEmpty else { return false }
+        var allSucceeded = true
         for id in songIds {
-            _ = try? await client.sendStatus(starred ? .star(id: id) : .unstar(id: id))
+            do {
+                _ = try await client.sendStatus(starred ? .star(id: id) : .unstar(id: id))
+            } catch {
+                allSucceeded = false
+            }
         }
         await reloadStarred()
+        return allSucceeded
     }
 
     func setAlbumStarred(_ starred: Bool, albumId: String) async {
@@ -294,8 +320,11 @@ final class LibraryModel {
         }
     }
 
-    // MARK: - Discovery (artist info, radio mixes, album shuffle)
+}
 
+// MARK: - Discovery (artist info, radio mixes, album shuffle)
+
+extension LibraryModel {
     /// Bio + similar artists for the artist page. Best-effort: nil simply
     /// hides the extras (servers without a metadata agent return little).
     func artistInfo(id: String) async -> ArtistInfo2Body.Info? {
@@ -341,20 +370,27 @@ final class LibraryModel {
 
 extension LibraryModel {
     func loadHomeIfNeeded() async {
-        guard !homeLoaded else { return }
+        guard !homeLoaded, !homeLoading else { return }
         await reloadHome()
     }
 
     /// The four shelves load concurrently; a shelf the server can't provide
     /// simply stays empty (the view hides it).
     func reloadHome() async {
+        guard !homeLoading else { return }
+        homeLoading = true
+        defer { homeLoading = false }
         async let newest = albumList(type: "newest")
         async let recent = albumList(type: "recent")
         async let frequent = albumList(type: "frequent")
         async let random = albumList(type: "random")
         (homeNewest, homeRecent, homeFrequent, homeRandom)
             = await (newest, recent, frequent, random)
-        homeLoaded = true
+        // All-empty almost always means the fetches failed (offline at
+        // launch) — stay "unloaded" so the next appearance retries instead
+        // of showing an empty Home until relaunch.
+        homeLoaded = !(homeNewest.isEmpty && homeRecent.isEmpty
+                       && homeFrequent.isEmpty && homeRandom.isEmpty)
     }
 
     /// Re-roll just the Random shelf (the Home view's refresh button).

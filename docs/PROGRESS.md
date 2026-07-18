@@ -50,6 +50,45 @@ xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
 
 ---
 
+## Bug-hunt batch: teardown, ordering, and async-race audit (2026-07-18)
+Three-way audit prompted by the artist-selection and drag-order bugs
+(same-family hunt). Ten fixes, all covered by the suite (107 green):
+- **Genre browser race** — the pane's Binding-setter Task is never
+  cancelled; two rapid genre clicks could leave the wrong genre's songs
+  displayed. Stale results now dropped (`storedGenre` recheck after await).
+- **Stale-empty clobbers** — cancelled `.task(id:)` loads resolve empty
+  (LibraryModel swallows CancellationError) and blanked fresh views:
+  search results mid-typing, artist detail, album detail. All three now
+  guard `Task.isCancelled` before assigning.
+- **Home permanently empty after an offline launch** — `homeLoaded` was
+  set unconditionally; all-empty shelves now leave it false so the next
+  appearance retries. In-flight guard added.
+- **Star rollback** — a failed star/unstar left the optimistic override
+  wrong until the view died; `setStarred` now reports success and
+  `TrackTableView` rolls back on failure (+ overrides cleared when a
+  fresh tracks array arrives).
+- **Queue-save ordering** — rapid skips fired concurrent `savePlayQueue`
+  POSTs that could land out of order (older snapshot winning server-side);
+  saves are now FIFO-chained (`queueSaveTask`).
+- **Play Next vs shuffle-off** — `playNext`/`insertInQueue` appended to
+  `unshuffledOrder`, so turning shuffle off banished a just-queued track
+  to the end. Canonical order now mirrors the queue (shuffle off) or
+  slots after the current song (shuffle on). Two regression tests.
+- **Duplicate fetches** — in-flight guards for artists/genres/starred
+  loads; `starredLoaded` flag stops zero-favorites users refetching on
+  every appearance. `shuffleLibrary` joined the `isPreparingMix` guard.
+- Expanded artist bio survives Back (persisted as `artistBioExpandedID`).
+- **Audited clean** (no change needed): Up Next index math incl. the
+  `hi+2` move destination, disc-header row mapping, playlist
+  reorder-by-replace, all three drop sites, `isPreparingMix` lifecycle,
+  restore-vs-play race. **Known + accepted:** header Play uses album
+  order even when the table is sorted (intended); duplicate-song queue
+  restore snaps to the first copy (savePlayQueue is id-based); scrobble
+  now-playing ordering under rapid skips (best-effort).
+- **Tracked, deferred:** SwiftUI scroll-position persistence for
+  Albums/Home/artist detail (the AppKit table autosave doesn't cover
+  them); genre-songs/playlist caching to avoid refetch flash on Back.
+
 ## Fix: Back from an album reset the Artists selection (2026-07-18)
 Opening an album replaces the whole section view in the detail column
 (`RootView`'s `if let album` swap), so `ArtistsView`'s `@State selectedID`

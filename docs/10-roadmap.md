@@ -188,6 +188,11 @@ this is where the direct macOS competitors (EKO, Supersonic) compete.
   state matches reality in all combinations.
 
 ### Tracked, unscheduled (revisit on demand)
+- **SwiftUI scroll-position persistence** for the Albums grid, Home, and
+  artist detail — they reset to top when an album opens over them (the
+  `scrollAutosaveKey` mechanism is AppKit-table-only). S–M.
+- **Cache genre songs / playlist detail in LibraryModel** so Back doesn't
+  refetch with a spinner flash. S.
 - **Public share links** (`createShare`) — "Copy Share Link" context
   action; Navidrome supports it, few clients expose it. S.
 - **Bookmarks + playback speed** (`getBookmarks`/`createBookmark`) — the

@@ -81,7 +81,12 @@ struct ArtistDetailView: View {
     @Environment(Navigator.self) private var navigator
     @State private var albums: [Album] = []
     @State private var info: ArtistInfo2Body.Info?
-    @State private var bioExpanded = false
+    /// Persisted (not @State) as the id of the artist whose bio is expanded:
+    /// opening an album tears this view down, and Back must not collapse the
+    /// bio. A different artist naturally reads as collapsed.
+    @AppStorage("artistBioExpandedID") private var bioExpandedID = ""
+
+    private var bioExpanded: Bool { bioExpandedID == artist.id }
 
     var body: some View {
         ScrollView {
@@ -104,10 +109,13 @@ struct ArtistDetailView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .task(id: artist.id) {
-            bioExpanded = false
             async let albumsLoad = library.albums(forArtist: artist.id)
             async let infoLoad = library.artistInfo(id: artist.id)
-            (albums, info) = await (albumsLoad, infoLoad)
+            let (loadedAlbums, loadedInfo) = await (albumsLoad, infoLoad)
+            // Cancelled loads (artist switched underneath) resolve empty —
+            // don't clobber the shown artist's grid/bio with them.
+            if Task.isCancelled { return }
+            (albums, info) = (loadedAlbums, loadedInfo)
         }
     }
 
@@ -145,7 +153,9 @@ struct ArtistDetailView: View {
                 .lineLimit(bioExpanded ? nil : 3)
                 .padding(.horizontal).padding(.top, 10)
                 .contentShape(Rectangle())
-                .onTapGesture { withAnimation { bioExpanded.toggle() } }
+                .onTapGesture {
+                    withAnimation { bioExpandedID = bioExpanded ? "" : artist.id }
+                }
                 .help(bioExpanded ? "Click to collapse" : "Click to read the full bio")
                 .accessibilityAddTraits(.isButton)
         }

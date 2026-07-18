@@ -33,6 +33,12 @@ extension PlayerModel {
         guard let queueStore, let snapshot = playQueueSnapshot else { return }
         guard force || Date.now.timeIntervalSince(lastQueueSave) >= Self.saveInterval else { return }
         lastQueueSave = .now
-        Task { await queueStore(snapshot) }
+        // FIFO-chained on the previous save: concurrent POSTs can complete
+        // out of order, letting an older snapshot win server-side.
+        let previous = queueSaveTask
+        queueSaveTask = Task {
+            await previous?.value
+            await queueStore(snapshot)
+        }
     }
 }

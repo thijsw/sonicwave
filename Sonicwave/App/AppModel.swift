@@ -38,7 +38,10 @@ final class AppModel {
     /// 500 random songs (~a full day of music) stands in — the server already
     /// randomizes, so the batch plays as returned.
     func shuffleLibrary() {
+        guard !isPreparingMix else { return }
+        isPreparingMix = true
         Task {
+            defer { isPreparingMix = false }
             let batch = await library.randomBatch()
             guard !batch.isEmpty else { return }
             player.play(tracks: batch)

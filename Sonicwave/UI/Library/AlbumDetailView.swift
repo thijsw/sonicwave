@@ -28,8 +28,10 @@ struct AlbumDetailView: View {
         }
         .task(id: album.id) {
             // One getAlbum fetch supplies both the tracks and the disc
-            // subtitles (multi-disc headers).
+            // subtitles (multi-disc headers). A cancelled fetch (album
+            // switched underneath) resolves nil — don't clobber with empty.
             let detail = await library.album(id: album.id)
+            if Task.isCancelled { return }
             tracks = detail?.song ?? []
             discSubtitles = detail?.discSubtitles ?? [:]
             await library.loadStarredIfNeeded()

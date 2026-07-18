@@ -48,7 +48,12 @@ struct SearchResultsView: View {
             // page doesn't flash a spinner on every keystroke.
             try? await Task.sleep(for: .milliseconds(250))
             if Task.isCancelled { return }
-            results = await library.search(query)
+            let found = await library.search(query)
+            // A cancelled in-flight search resolves to empty results — never
+            // assign them, or the visible list blanks mid-typing (defeating
+            // the keep-previous-results behavior above).
+            if Task.isCancelled { return }
+            results = found
             isSearching = false
         }
     }

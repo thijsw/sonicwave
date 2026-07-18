@@ -59,6 +59,11 @@ struct TrackTableView: View {
         .sheet(item: $infoSong) { song in
             TrackInfoView(song: song)
         }
+        .onChange(of: tracks) {
+            // A fresh tracks array carries server truth — stale overrides
+            // must not shadow it.
+            starOverrides = [:]
+        }
         .alert("New Playlist", isPresented: $showNewPlaylist) {
             TextField("Name", text: $newPlaylistName)
             Button("Create") {
@@ -178,7 +183,14 @@ struct TrackTableView: View {
 
     private func toggleStar(_ songIds: [String], star: Bool) {
         for id in songIds { starOverrides[id] = star }
-        Task { await library.setStarred(star, songIds: songIds) }
+        Task {
+            let succeeded = await library.setStarred(star, songIds: songIds)
+            if !succeeded {
+                // Roll back the optimistic stars the server refused —
+                // otherwise the wrong state sticks until the view dies.
+                for id in songIds { starOverrides[id] = nil }
+            }
+        }
     }
 }
 

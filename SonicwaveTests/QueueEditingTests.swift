@@ -64,6 +64,31 @@ struct QueueEditingTests {
         #expect(player.queue.map(\.id) == ["1", "9"])
     }
 
+    /// Regression: with shuffle ON, "Play Next" appended to the canonical
+    /// order — so turning shuffle OFF banished the just-queued track to the
+    /// end of upcoming instead of keeping it next.
+    @Test func playNextDuringShuffleSurvivesShuffleOff() {
+        let player = PlayerModel()
+        player.play(tracks: songs(["1", "2", "3", "4"]), startAt: 0)
+        player.shuffle = true
+        player.playNext(songs(["9"]))
+        #expect(player.queue[1].id == "9")
+        player.shuffle = false
+        #expect(player.queue.map(\.id) == ["1", "9", "2", "3", "4"])
+    }
+
+    /// Regression: a drag-insert with shuffle OFF must keep the canonical
+    /// order mirroring the queue, so a later shuffle on→off round-trip
+    /// restores the inserted position (not an append-at-end position).
+    @Test func insertPositionSurvivesShuffleRoundTrip() {
+        let player = PlayerModel()
+        player.play(tracks: songs(["1", "2", "3"]), startAt: 0)
+        player.insertInQueue(songs(["9"]), at: 1)
+        player.shuffle = true
+        player.shuffle = false
+        #expect(player.queue.map(\.id) == ["1", "9", "2", "3"])
+    }
+
     @Test func clearUpNextTrimsAfterCurrent() {
         let player = PlayerModel()
         player.play(tracks: songs(["1", "2", "3", "4"]), startAt: 1)

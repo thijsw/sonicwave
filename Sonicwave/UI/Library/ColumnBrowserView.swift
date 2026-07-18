@@ -137,7 +137,12 @@ struct ColumnBrowserView: View {
     private func loadGenre(_ genre: String?) async {
         guard let genre else { songs = []; return }
         isLoading = true
-        songs = await library.songs(forGenre: genre)
+        let fetched = await library.songs(forGenre: genre)
+        // The Binding-setter Task isn't cancelled by a newer selection —
+        // two rapid genre clicks race, and the slower fetch must never land
+        // under the newer selection.
+        guard storedGenre == genre else { return }
+        songs = fetched
         isLoading = false
     }
 

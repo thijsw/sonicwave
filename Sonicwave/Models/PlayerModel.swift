@@ -67,6 +67,9 @@ final class PlayerModel {
     @ObservationIgnored let queueStore: (@Sendable (PlayQueueSnapshot) async -> Void)?
     /// Wall-clock throttle for the periodic (position-driven) queue saves.
     @ObservationIgnored var lastQueueSave: Date = .distantPast
+    /// Chains queue saves so rapid track-skips can't land out of order
+    /// server-side (an older snapshot overwriting a newer one).
+    @ObservationIgnored var queueSaveTask: Task<Void, Never>?
     /// Where a restored queue resumes; consumed by the next stopped→play.
     @ObservationIgnored private var resumePosition: TimeInterval = 0
 
@@ -110,14 +113,33 @@ final class PlayerModel {
     }
 
     func playNext(_ tracks: [Song]) {
-        unshuffledOrder.append(contentsOf: tracks)
-        guard let index = currentIndex else { queue.append(contentsOf: tracks); return }
+        guard let index = currentIndex else {
+            queue.append(contentsOf: tracks)
+            unshuffledOrder = queue
+            return
+        }
         queue.insert(contentsOf: tracks, at: index + 1)
+        syncUnshuffledOrder(inserting: tracks)
     }
 
     func enqueue(_ tracks: [Song]) {
         unshuffledOrder.append(contentsOf: tracks)
         queue.append(contentsOf: tracks)
+    }
+
+    /// Keep the canonical order in step with a mid-queue insert. With
+    /// shuffle off the queue *is* the canonical order; with shuffle on, slot
+    /// the new tracks right after the current song — blindly appending would
+    /// banish a just-"Play Next"ed track to the end when shuffle turns off.
+    private func syncUnshuffledOrder(inserting tracks: [Song]) {
+        if !shuffle {
+            unshuffledOrder = queue
+        } else if let current = currentTrack,
+                  let anchor = unshuffledOrder.firstIndex(of: current) {
+            unshuffledOrder.insert(contentsOf: tracks, at: anchor + 1)
+        } else {
+            unshuffledOrder.append(contentsOf: tracks)
+        }
     }
 
     // MARK: - Queue editing (Up Next)
@@ -144,10 +166,10 @@ final class PlayerModel {
     /// keeping the current track tracked.
     func insertInQueue(_ tracks: [Song], at index: Int) {
         guard !tracks.isEmpty else { return }
-        unshuffledOrder.append(contentsOf: tracks)
         let clamped = min(max(index, 0), queue.count)
         queue.insert(contentsOf: tracks, at: clamped)
         remapPositions { $0 >= clamped ? $0 + tracks.count : $0 }
+        syncUnshuffledOrder(inserting: tracks)
     }
 
     /// Apply a position transform (from a queue mutation) to every tracked
