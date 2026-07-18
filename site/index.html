@@ -114,6 +114,14 @@
         <h3>A proper Mac citizen</h3>
         <p>Menu-bar player, media keys, Control Center widget, Light/Dark, VoiceOver, state restoration. Sandboxed with a single entitlement.</p>
       </article>
+      <article class="reveal">
+        <h3>Radio from any song</h3>
+        <p>Right-click a track or artist and <strong>Start Radio</strong> — a similar-songs mix from your server&rsquo;s metadata agent, with sensible fallbacks when it has none. Artist pages carry bios and similar artists.</p>
+      </article>
+      <article class="reveal">
+        <h3>Shuffle, two ways</h3>
+        <p><strong>Shuffle Library</strong> queues a 500-song mix of everything. <strong>Shuffle Albums</strong> plays whole albums back-to-back in random order — gapless stays gapless — and honors your genre or decade filter.</p>
+      </article>
     </div>
   </section>
 
@@ -166,9 +174,23 @@
 
     <article class="release">
       <header>
+        <span class="release-ver">0.5.0</span>
+        <time datetime="2026-07-18">July 18, 2026</time>
+        <span class="release-badge">Latest</span>
+      </header>
+      <ul>
+        <li><strong>Start Radio</strong> — right-click any song or artist for a similar-songs mix, seeded by your server&rsquo;s metadata agent (Last.fm or Navidrome&rsquo;s sonic analysis). No agent? It falls back to top songs, then an artist shuffle — the button always plays.</li>
+        <li><strong>Artist pages grew up</strong> — portrait, expandable biography, an Artist Radio button, and a Similar Artists shelf that navigates in place.</li>
+        <li><strong>Shuffle Albums</strong> — whole albums back-to-back in random order, from the Controls menu or the Albums grid. Respects your genre/decade filter.</li>
+        <li><strong>Runs on macOS 14 Sonoma</strong> — the minimum system dropped from macOS 15, welcoming 2018–2019 MacBook Airs back in.</li>
+        <li>Fixed: dragging multiple songs into Up Next or a playlist scrambled their order.</li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <header>
         <span class="release-ver">0.4.0</span>
         <time datetime="2026-07-17">July 17, 2026</time>
-        <span class="release-badge">Latest</span>
       </header>
       <ul>
         <li><strong>FLAC playback, actually fixed</strong> — a subtle decoder bug made FLAC albums play ~half a second per track, then skip on. They now stream gapless like everything else.</li>

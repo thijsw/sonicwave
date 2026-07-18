@@ -50,6 +50,13 @@ xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
 
 ---
 
+## v0.5.0 released (2026-07-18)
+Build 8, notarized/stapled/Gatekeeper-accepted, hand-written notes. Ships
+M10 discovery (Start Radio, artist pages, Shuffle Albums), the macOS 14
+Sonoma floor (headline), and the drag-order fix. Website: 0.5.0 changelog
+entry + two new feature tiles (radio, shuffle); README synced. The
+release-triggered Pages deploy stamps 0.5.0 into the version spans.
+
 ## Fix: multi-song drags dropped into Up Next / playlists lost their order (2026-07-18)
 SwiftUI hands multi-item drop payloads over in no guaranteed order, and all
 three drop sites (Up Next `.onInsert`, empty-queue `.dropDestination`,

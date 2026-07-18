@@ -64,8 +64,14 @@ Navidrome demo.
   disc headers.
 - Column browser (Genre → Artist → Album), global search (⌘F), quality
   badges ("FLAC", "320 kbps") with lossless-first sorting. Filter the
-  Albums grid by genre or decade, or **Shuffle Library** for a fresh
-  500-song mix of everything.
+  Albums grid by genre or decade, **Shuffle Library** for a fresh
+  500-song mix, or **Shuffle Albums** for whole albums back-to-back in
+  random order (filter-aware, gapless intact).
+- **Start Radio** from any song or artist: a similar-songs mix via your
+  server's metadata agent (Last.fm or Navidrome's sonic analysis), with
+  graceful fallbacks when it has none.
+- **Artist pages** with portrait, expandable bio, an Artist Radio button,
+  and a Similar Artists shelf.
 - Server playlists round-trip fully: create, rename, reorder, delete.
 - Favorites everywhere, with a ★ column.
 - **Scrobbling** (on by default) feeds your server's play counts and
