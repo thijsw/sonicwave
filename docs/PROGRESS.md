@@ -50,6 +50,14 @@ xcodebuild -project Sonicwave.xcodeproj -scheme Sonicwave \
 
 ---
 
+## v0.6.0 released (2026-07-18)
+Build 9, notarized/stapled/Gatekeeper-accepted, hand-written notes.
+Polish/reliability release: Back-navigation state restoration (artist
+selection, three scroll surfaces, expanded bio), the ten-bug audit batch
+(genre race, stale-empty clobbers, offline Home, star rollback, ordered
+queue saves, Play Next vs shuffle-off), and the drag-order fix's siblings.
+Website changelog entry added; README already current (no new features).
+
 ## Albums grid, Home, and artist-detail scroll survive Back (2026-07-18)
 All three SwiftUI scroll surfaces now persist position via
 `scrollPosition(id:)` (macOS 14 API) + `scrollTargetLayout()`, stored in
